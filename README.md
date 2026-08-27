@@ -1,6 +1,10 @@
-# Relay
+<p align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="Relay logo" />
+</p>
 
-A fast native Mihomo desktop client powered by GPUIX.
+<h1 align="center">Relay</h1>
+
+<p align="center">A fast native Mihomo desktop client powered by GPUIX.</p>
 
 Relay is an experimental desktop-first proxy client built with React, TypeScript, and [GPUIX](https://github.com/remorses/gpuix). The UI renders natively through Zed's GPUI stack rather than Electron or a WebView.
 
