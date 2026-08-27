@@ -18,7 +18,7 @@ const initialSnapshot: RelaySnapshot = {
     uploadTotal: 2.7,
     downloadTotal: 18.4,
     memory: 86,
-    connections: 8,
+    connections: 4,
   },
   proxyGroups: [
     {

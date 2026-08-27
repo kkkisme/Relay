@@ -6,7 +6,7 @@ import { colors, FONT } from '../theme'
 export function Profiles({ profiles, busy, dispatch }: { profiles: Profile[]; busy: string | null; dispatch: (action: RelayAction) => void }) {
   return (
     <div>
-      <SectionHeader title="Configuration profiles" description="Subscription and local Mihomo configurations" action={<Button tone="primary" onClick={() => {}}>Add profile</Button>} />
+      <SectionHeader title="Configuration profiles" description="Subscription and local Mihomo configurations" action={<Badge>Import lands in Phase 3</Badge>} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {profiles.map((profile) => (
           <Card key={profile.id}>
