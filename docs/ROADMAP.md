@@ -38,12 +38,14 @@ Relay Core is compiled as a separate Bun executable. It owns Mihomo's lifecycle 
 
 Profiles are copied into Relay-managed storage, validated by Mihomo before use, and tracked as immutable revisions. Active-profile failures automatically restore the last working revision.
 
-## Phase 4 — Desktop integration
+## Phase 4 — Desktop integration ◐
 
-- System proxy lifecycle with crash recovery
-- TUN installation, permissions, and state management
-- Tray menu, launch at login, and background operation
-- Platform-specific paths, logs, and update handling
+- [x] System proxy lifecycle with crash recovery
+- [ ] TUN installation, permissions, and state management (capability/permission reporting is implemented; privileged installation remains)
+- [ ] Tray menu, launch at login, and background operation (launch at login is implemented; GPUIX tray/window APIs remain)
+- [ ] Platform-specific paths, logs, and update handling (paths and rotating logs are implemented; update handling remains)
+
+System proxy changes are preceded by an atomic recovery marker containing the exact previous state. Normal shutdown, Mihomo failure, and the next Relay Core launch all attempt restoration. See [desktop integration notes](DESKTOP_INTEGRATION.md).
 
 ## Phase 5 — Release quality
 

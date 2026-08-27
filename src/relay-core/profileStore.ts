@@ -7,11 +7,10 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { homedir } from 'node:os'
-import { basename, dirname, extname, join, resolve } from 'node:path'
-import process from 'node:process'
+import { dirname, extname, join, resolve } from 'node:path'
 import { parse } from 'yaml'
 import type { Profile } from '../core/types'
+import { relayPaths } from './platformPaths'
 
 type ProfileSource = 'remote' | 'local'
 type Revision = {
@@ -51,7 +50,7 @@ type Validator = (path: string, homeDirectory: string, signal?: AbortSignal) => 
 const maxProfileBytes = 8 * 1024 * 1024
 
 function defaultRoot() {
-  return process.env.RELAY_PROFILE_DIR ?? join(homedir(), '.config', 'relay', 'profiles')
+  return relayPaths().profiles
 }
 
 function configStats(content: string) {

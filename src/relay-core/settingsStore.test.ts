@@ -23,6 +23,7 @@ describe('SettingsStore', () => {
       allowLan: true,
       systemProxy: true,
       ipv6: false,
+      launchAtLogin: false,
     })
   })
 })

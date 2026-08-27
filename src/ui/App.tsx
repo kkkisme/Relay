@@ -177,6 +177,6 @@ function PageContent({
     case 'logs':
       return <Logs logs={snapshot.logs} dispatch={dispatch} />
     case 'settings':
-      return <Settings settings={snapshot.settings} dispatch={dispatch} />
+      return <Settings settings={snapshot.settings} desktop={snapshot.desktop} dispatch={dispatch} />
   }
 }

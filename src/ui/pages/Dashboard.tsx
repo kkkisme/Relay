@@ -56,8 +56,8 @@ export function Dashboard({
           <SectionHeader title={t('dashboard.quickControls')} description={t('dashboard.runtimeSwitches')} />
           <Card>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <QuickToggle label={t('dashboard.systemProxy')} value={snapshot.settings.systemProxy} onChange={(systemProxy) => dispatch({ type: 'update-settings', settings: { systemProxy } })} />
-              <QuickToggle label={t('dashboard.tun')} value={snapshot.settings.tun} onChange={(tun) => dispatch({ type: 'update-settings', settings: { tun } })} />
+              <QuickToggle label={t('dashboard.systemProxy')} value={snapshot.settings.systemProxy} disabled={!snapshot.desktop.systemProxy.supported} onChange={(systemProxy) => dispatch({ type: 'update-settings', settings: { systemProxy } })} />
+              <QuickToggle label={t('dashboard.tun')} value={snapshot.settings.tun} disabled={!snapshot.settings.tun && snapshot.desktop.tun.permission !== 'granted'} onChange={(tun) => dispatch({ type: 'update-settings', settings: { tun } })} />
               <QuickToggle label={t('dashboard.allowLan')} value={snapshot.settings.allowLan} onChange={(allowLan) => dispatch({ type: 'update-settings', settings: { allowLan } })} />
             </div>
           </Card>
@@ -80,11 +80,11 @@ export function Dashboard({
   )
 }
 
-function QuickToggle({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+function QuickToggle({ label, value, onChange, disabled = false }: { label: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <text style={{ color: colors.text, fontFamily: FONT, fontSize: 13 }}>{label}</text>
-      <Toggle value={value} onChange={onChange} />
+      <Toggle value={value} onChange={onChange} disabled={disabled} />
     </div>
   )
 }

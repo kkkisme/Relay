@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
 import type { CoreEventListener, CoreTransport } from './transport'
 import type { CoreEvent, CoreMethod, CoreMethodMap, CoreRequest, CoreResponse } from './types'
@@ -134,8 +134,14 @@ export class ProcessCoreTransport implements CoreTransport {
   private spawnCore() {
     if (this.child && this.child.exitCode === null) return
     const executable = coreExecutable()
+    const executableName = basename(process.execPath).toLowerCase()
+    const appBinary = process.env.RELAY_APP_BINARY
+      ?? (executableName === 'relay' || executableName === 'relay.exe' ? process.execPath : undefined)
     const child = spawn(executable, ['--socket', this.endpoint], {
-      env: process.env,
+      env: {
+        ...process.env,
+        ...(appBinary ? { RELAY_APP_BINARY: appBinary } : {}),
+      },
       stdio: ['ignore', 'ignore', 'pipe'],
       windowsHide: true,
     })

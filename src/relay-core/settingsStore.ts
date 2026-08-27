@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
-import process from 'node:process'
 import type { RelaySettings } from '../core/types'
+import { relayPaths } from './platformPaths'
 
 const defaults: RelaySettings = {
   systemProxy: false,
@@ -11,10 +10,11 @@ const defaults: RelaySettings = {
   allowLan: false,
   ipv6: false,
   mode: 'rule',
+  launchAtLogin: false,
 }
 
 function defaultRoot() {
-  return process.env.RELAY_DATA_DIR ?? join(homedir(), '.config', 'relay')
+  return relayPaths().root
 }
 
 export class SettingsStore {
@@ -49,6 +49,7 @@ export class SettingsStore {
         allowLan: typeof value.allowLan === 'boolean' ? value.allowLan : defaults.allowLan,
         ipv6: typeof value.ipv6 === 'boolean' ? value.ipv6 : defaults.ipv6,
         mode: value.mode === 'global' || value.mode === 'direct' ? value.mode : 'rule',
+        launchAtLogin: typeof value.launchAtLogin === 'boolean' ? value.launchAtLogin : defaults.launchAtLogin,
       }
     } catch (error) {
       throw new Error(`Unable to read Relay settings: ${error instanceof Error ? error.message : String(error)}`)

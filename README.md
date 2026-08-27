@@ -10,7 +10,7 @@ Relay is an experimental desktop-first proxy client built with React, TypeScript
 
 ## Current milestone
 
-The Mihomo feature-integration milestone is implemented:
+The Mihomo feature-integration milestone is implemented, and the first desktop-integration slice is now available:
 
 - Native GPUIX application shell with six working sections
 - Dashboard traffic metrics and runtime controls
@@ -25,9 +25,13 @@ The Mihomo feature-integration milestone is implemented:
 - Persistent, immutable profile revisions with update and rollback controls
 - Automatic restoration of the previous configuration when activation fails
 - Atomic persistence for profiles and user runtime settings
+- Platform-native application data and rotating Relay Core logs
+- Reversible Windows, macOS, and GNOME system proxy management with crash recovery
+- TUN capability and privilege reporting before the setting can be enabled
+- Launch-at-login registration for Windows, macOS, and XDG desktops
 - In-memory Mock Core retained for deterministic UI development
 
-The next milestone adds desktop OS integration: system proxy recovery, TUN permissions, tray behavior, and launch at login. See [the roadmap](docs/ROADMAP.md).
+The remaining desktop work is a signed/elevated TUN helper plus tray and background-window behavior. The installed GPUIX release does not yet expose tray or window hide/show APIs, so Relay reports that boundary explicitly instead of emulating an Electron API. See [the roadmap](docs/ROADMAP.md) and [desktop integration notes](docs/DESKTOP_INTEGRATION.md).
 
 ## Architecture
 
@@ -90,6 +94,7 @@ Useful environment variables:
 | `RELAY_MIHOMO_AUTO_START=0` | Start Relay Core without starting Mihomo |
 | `RELAY_PROFILE_DIR` | Managed profile and revision storage directory |
 | `RELAY_DATA_DIR` | Persistent Relay settings directory |
+| `RELAY_APP_BINARY` | Packaged Relay executable used for launch-at-login registration |
 | `RELAY_CORE_MODE=mock` | Use the in-memory Mock Core instead of the child process |
 
 Validate the project:
@@ -104,7 +109,7 @@ The standalone executables are written to `dist/relay` and `dist/relay-core` (`.
 
 ## Status
 
-Relay is in early development. The native control plane, real Relay Core transport, and managed Mihomo profile lifecycle are implemented; desktop OS integration remains under development.
+Relay is in early development. The native control plane, real Relay Core transport, managed Mihomo profile lifecycle, and recoverable system-proxy integration are implemented. Privileged TUN installation, tray/background behavior, packaging, and release hardening remain under development.
 
 ## License
 

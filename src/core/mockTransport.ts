@@ -83,7 +83,14 @@ const initialSnapshot: RelaySnapshot = {
     { id: 'l3', level: 'debug', time: '14:08:42', message: 'chatgpt.com matched rule OpenAI -> Taiwan 01' },
     { id: 'l4', level: 'warning', time: '14:09:03', message: 'Tokyo 01 latency increased to 186 ms' },
   ],
-  settings: { systemProxy: true, tun: false, allowLan: false, ipv6: false, mode: 'rule' },
+  settings: { systemProxy: true, tun: false, allowLan: false, ipv6: false, mode: 'rule', launchAtLogin: false },
+  desktop: {
+    platform: 'mock',
+    systemProxy: { supported: true, enabled: true, managed: true },
+    tun: { supported: true, permission: 'granted', detail: 'Mock TUN permission granted' },
+    launchAtLogin: { supported: true, enabled: false },
+    tray: { supported: false, detail: 'Waiting for GPUIX tray support' },
+  },
 }
 
 const clone = <T,>(value: T): T => structuredClone(value)
@@ -214,6 +221,9 @@ export class MockCoreTransport implements CoreTransport {
         break
       case 'settings.update':
         this.snapshot.settings = { ...this.snapshot.settings, ...request.arguments }
+        this.snapshot.desktop.systemProxy.enabled = this.snapshot.settings.systemProxy
+        this.snapshot.desktop.systemProxy.managed = this.snapshot.settings.systemProxy
+        this.snapshot.desktop.launchAtLogin.enabled = this.snapshot.settings.launchAtLogin
         this.pushLog('info', 'Runtime settings updated')
         break
       case 'logs.clear':

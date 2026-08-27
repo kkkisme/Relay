@@ -1,4 +1,4 @@
-import type { RelaySettings } from '../../core'
+import type { DesktopStatus, RelaySettings } from '../../core'
 import { useI18n } from '../../i18n'
 import type { RelayAction } from '../../state/useRelay'
 import { Card, SectionHeader, Toggle } from '../components'
@@ -10,7 +10,7 @@ const modeLabels = {
   direct: 'settings.mode.direct',
 } as const
 
-export function Settings({ settings, dispatch }: { settings: RelaySettings; dispatch: (action: RelayAction) => void }) {
+export function Settings({ settings, desktop, dispatch }: { settings: RelaySettings; desktop: DesktopStatus; dispatch: (action: RelayAction) => void }) {
   const { locale, setLocale, t } = useI18n()
   const update = (next: Partial<RelaySettings>) => dispatch({ type: 'update-settings', settings: next })
   return (
@@ -48,10 +48,44 @@ export function Settings({ settings, dispatch }: { settings: RelaySettings; disp
         <SectionHeader title={t('settings.network')} description={t('settings.network.detail')} />
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SettingRow title={t('settings.systemProxy')} detail={t('settings.systemProxy.detail')} value={settings.systemProxy} onChange={(systemProxy) => update({ systemProxy })} />
-            <SettingRow title={t('settings.tun')} detail={t('settings.tun.detail')} value={settings.tun} onChange={(tun) => update({ tun })} />
+            <SettingRow
+              title={t('settings.systemProxy')}
+              detail={desktop.systemProxy.error ?? (desktop.systemProxy.managed ? t('settings.systemProxy.managed') : t('settings.systemProxy.detail'))}
+              value={settings.systemProxy}
+              disabled={!desktop.systemProxy.supported}
+              onChange={(systemProxy) => update({ systemProxy })}
+            />
+            <SettingRow
+              title={t('settings.tun')}
+              detail={t(`settings.tun.permission.${desktop.tun.permission}`)}
+              value={settings.tun}
+              disabled={!settings.tun && desktop.tun.permission !== 'granted'}
+              onChange={(tun) => update({ tun })}
+            />
             <SettingRow title={t('settings.allowLan')} detail={t('settings.allowLan.detail')} value={settings.allowLan} onChange={(allowLan) => update({ allowLan })} />
             <SettingRow title={t('settings.ipv6')} detail={t('settings.ipv6.detail')} value={settings.ipv6} onChange={(ipv6) => update({ ipv6 })} />
+          </div>
+        </Card>
+      </div>
+
+      <div>
+        <SectionHeader title={t('settings.desktop')} description={t('settings.desktop.detail')} />
+        <Card>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <SettingRow
+              title={t('settings.launchAtLogin')}
+              detail={desktop.launchAtLogin.supported ? t('settings.launchAtLogin.detail') : t('settings.feature.unavailable')}
+              value={settings.launchAtLogin}
+              disabled={!desktop.launchAtLogin.supported}
+              onChange={(launchAtLogin) => update({ launchAtLogin })}
+            />
+            <StatusRow
+              title={t('settings.tray')}
+              detail={t('settings.tray.pending')}
+              available={desktop.tray.supported}
+              availableLabel={t('settings.feature.available')}
+              unavailableLabel={t('settings.feature.pending')}
+            />
           </div>
         </Card>
       </div>
@@ -104,14 +138,28 @@ export function Settings({ settings, dispatch }: { settings: RelaySettings; disp
   )
 }
 
-function SettingRow({ title, detail, value, onChange }: { title: string; detail: string; value: boolean; onChange: (value: boolean) => void }) {
+function SettingRow({ title, detail, value, onChange, disabled = false }: { title: string; detail: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <text style={{ color: colors.text, fontFamily: FONT, fontSize: 13, fontWeight: 650 }}>{title}</text>
         <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>{detail}</text>
       </div>
-      <Toggle value={value} onChange={onChange} />
+      <Toggle value={value} onChange={onChange} disabled={disabled} />
+    </div>
+  )
+}
+
+function StatusRow({ title, detail, available, availableLabel, unavailableLabel }: { title: string; detail: string; available: boolean; availableLabel: string; unavailableLabel: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <text style={{ color: colors.text, fontFamily: FONT, fontSize: 13, fontWeight: 650 }}>{title}</text>
+        <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>{detail}</text>
+      </div>
+      <text style={{ color: available ? colors.success : colors.warning, fontFamily: FONT, fontSize: 11, fontWeight: 650 }}>
+        {available ? availableLabel : unavailableLabel}
+      </text>
     </div>
   )
 }

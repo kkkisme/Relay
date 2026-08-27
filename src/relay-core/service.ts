@@ -2,6 +2,7 @@ import type {
   Connection,
   CoreMethod,
   CoreMethodMap,
+  DesktopStatus,
   LogEntry,
   ProxyGroup,
   Profile,
@@ -13,6 +14,8 @@ import type { MihomoConnection, MihomoProxy, MihomoSnapshot } from './mihomoClie
 import { MihomoProcess } from './mihomoProcess'
 import { ProfileStore, type ConfigTarget } from './profileStore'
 import { SettingsStore } from './settingsStore'
+import { FileLogger } from './fileLogger'
+import { DesktopIntegration } from './desktopIntegration'
 
 const bytesPerGiB = 1024 ** 3
 const bytesPerMiB = 1024 ** 2
@@ -62,18 +65,27 @@ function asConnection(connection: MihomoConnection): Connection {
 
 export class RelayCoreService {
   private readonly process: MihomoProcess
+  private readonly desktop: DesktopIntegration
   private readonly profiles: ProfileStore
   private readonly settingsStore: SettingsStore
   private readonly runtimeProfileName: string
   private readonly runtimeProfileUpdatedAt = new Date().toISOString()
+  private readonly fileLogger = new FileLogger()
   private logs: LogEntry[] = []
   private settings: RelaySettings
   private delays = new Map<string, number>()
   private delayErrors = new Set<string>()
   private previousTotals?: { at: number; upload: number; download: number }
+  private desktopStatus?: DesktopStatus
+  private desktopStatusAt = 0
+  private desktopInitialized = false
 
   constructor() {
-    this.process = new MihomoProcess((level, message) => this.pushLog(level, message))
+    this.desktop = new DesktopIntegration()
+    this.process = new MihomoProcess(
+      (level, message) => this.pushLog(level, message),
+      () => void this.handleUnexpectedCoreExit(),
+    )
     this.profiles = new ProfileStore((path, homeDirectory, signal) =>
       this.process.validateConfig(path, homeDirectory, signal))
     this.settingsStore = new SettingsStore()
@@ -86,16 +98,19 @@ export class RelayCoreService {
   }
 
   async autoStart() {
-    if (process.env.RELAY_MIHOMO_AUTO_START === '0') return
     try {
+      await this.initializeDesktop()
+      if (process.env.RELAY_MIHOMO_AUTO_START === '0') return
       await this.startSelectedProfile()
     } catch (error) {
       this.pushLog('error', error instanceof Error ? error.message : String(error))
     }
   }
 
-  stop() {
-    return this.process.stop()
+  async stop() {
+    await this.desktop.disableSystemProxy()
+    this.invalidateDesktopStatus()
+    await this.process.stop()
   }
 
   reportError(message: string) {
@@ -113,7 +128,7 @@ export class RelayCoreService {
       case 'core.set-running': {
         const { running } = argumentsValue as CoreMethodMap['core.set-running']['arguments']
         if (running) await this.startSelectedProfile(signal)
-        else await this.process.stop()
+        else await this.stop()
         break
       }
       case 'proxy.select': {
@@ -169,8 +184,7 @@ export class RelayCoreService {
         break
       case 'settings.update': {
         const next = argumentsValue as CoreMethodMap['settings.update']['arguments']
-        if (this.process.running) await this.process.client.updateSettings(next, signal)
-        this.settings = this.settingsStore.update(next)
+        await this.updateSettings(next, signal)
         this.pushLog('info', 'Runtime settings updated')
         break
       }
@@ -185,12 +199,12 @@ export class RelayCoreService {
   }
 
   async snapshot(signal?: AbortSignal): Promise<RelaySnapshot> {
-    if (!this.process.running) return this.stoppedSnapshot()
+    if (!this.process.running) return await this.stoppedSnapshot()
     const source = await this.process.client.snapshot(signal)
-    return this.mapSnapshot(source)
+    return await this.mapSnapshot(source)
   }
 
-  private stoppedSnapshot(): RelaySnapshot {
+  private async stoppedSnapshot(): Promise<RelaySnapshot> {
     this.previousTotals = undefined
     return {
       status: { running: false, version: 'Mihomo unavailable', uptime: '00:00:00' },
@@ -207,10 +221,11 @@ export class RelayCoreService {
       connections: [],
       logs: [...this.logs],
       settings: { ...this.settings },
+      desktop: await this.getDesktopStatus(),
     }
   }
 
-  private mapSnapshot(source: MihomoSnapshot): RelaySnapshot {
+  private async mapSnapshot(source: MihomoSnapshot): Promise<RelaySnapshot> {
     const proxies = source.proxies.proxies ?? {}
     const groups = this.mapGroups(proxies)
     const connections = (source.connections.connections ?? []).map(asConnection)
@@ -243,6 +258,7 @@ export class RelayCoreService {
       connections,
       logs: [...this.logs],
       settings: { ...this.settings },
+      desktop: await this.getDesktopStatus(),
     }
   }
 
@@ -279,6 +295,7 @@ export class RelayCoreService {
       allowLan: typeof configs['allow-lan'] === 'boolean' ? configs['allow-lan'] : this.settings.allowLan,
       ipv6: typeof configs.ipv6 === 'boolean' ? configs.ipv6 : this.settings.ipv6,
       mode: mode === 'global' || mode === 'direct' ? mode : 'rule',
+      launchAtLogin: this.settings.launchAtLogin,
     }
   }
 
@@ -353,12 +370,100 @@ export class RelayCoreService {
   }
 
   private async launch(target?: ConfigTarget, signal?: AbortSignal) {
+    if (this.settings.tun) await this.desktop.requireTunPermission()
     await this.process.start(signal, target ? this.processTarget(target) : undefined)
     try {
       await this.process.client.updateSettings(this.settings, signal)
+      if (this.settings.systemProxy) {
+        const source = await this.process.client.snapshot(signal)
+        await this.desktop.enableSystemProxy(this.mixedPort(source.configs))
+        this.invalidateDesktopStatus()
+      }
     } catch (error) {
+      await this.desktop.disableSystemProxy().catch(() => {})
       await this.process.stop()
       throw error
+    }
+  }
+
+  private async updateSettings(next: Partial<RelaySettings>, signal?: AbortSignal) {
+    const previous = { ...this.settings }
+    if (next.tun === true) await this.desktop.requireTunPermission()
+    try {
+      if (this.process.running) await this.process.client.updateSettings(next, signal)
+      if (next.launchAtLogin !== undefined && next.launchAtLogin !== previous.launchAtLogin) {
+        await this.desktop.setLaunchAtLogin(next.launchAtLogin)
+      }
+      if (next.systemProxy !== undefined && next.systemProxy !== previous.systemProxy) {
+        if (next.systemProxy) {
+          if (!this.process.running) throw new Error('Start Mihomo before enabling the system proxy')
+          const source = await this.process.client.snapshot(signal)
+          await this.desktop.enableSystemProxy(this.mixedPort(source.configs))
+        } else {
+          await this.desktop.disableSystemProxy()
+        }
+      }
+      this.settings = this.settingsStore.update(next)
+      this.invalidateDesktopStatus()
+    } catch (error) {
+      if (this.process.running) await this.process.client.updateSettings(previous).catch(() => {})
+      if (next.launchAtLogin !== undefined && next.launchAtLogin !== previous.launchAtLogin) {
+        await this.desktop.setLaunchAtLogin(previous.launchAtLogin).catch(() => {})
+      }
+      if (next.systemProxy !== undefined && next.systemProxy !== previous.systemProxy) {
+        if (previous.systemProxy && this.process.running) {
+          const source = await this.process.client.snapshot().catch(() => undefined)
+          if (source) await this.desktop.enableSystemProxy(this.mixedPort(source.configs)).catch(() => {})
+        } else {
+          await this.desktop.disableSystemProxy().catch(() => {})
+        }
+      }
+      this.invalidateDesktopStatus()
+      throw error
+    }
+  }
+
+  private mixedPort(configs: Record<string, unknown>) {
+    const candidates = [configs['mixed-port'], configs.port, configs['socks-port']]
+    const port = candidates.find((value) => typeof value === 'number' && value > 0)
+    if (typeof port !== 'number') throw new Error('The active profile does not expose a proxy port')
+    return port
+  }
+
+  private async initializeDesktop() {
+    if (this.desktopInitialized) return
+    const recovered = await this.desktop.initialize()
+    this.desktopInitialized = true
+    if (recovered) this.pushLog('warning', 'Recovered system proxy settings from an interrupted Relay session')
+    if (this.settings.launchAtLogin) {
+      try {
+        await this.desktop.setLaunchAtLogin(true)
+      } catch (error) {
+        this.pushLog('warning', `Unable to synchronize launch at login: ${this.errorMessage(error)}`)
+      }
+    }
+    this.invalidateDesktopStatus()
+  }
+
+  private async getDesktopStatus() {
+    if (this.desktopStatus && Date.now() - this.desktopStatusAt < 10_000) return this.desktopStatus
+    this.desktopStatus = await this.desktop.status()
+    this.desktopStatusAt = Date.now()
+    return this.desktopStatus
+  }
+
+  private invalidateDesktopStatus() {
+    this.desktopStatus = undefined
+    this.desktopStatusAt = 0
+  }
+
+  private async handleUnexpectedCoreExit() {
+    try {
+      await this.desktop.disableSystemProxy()
+      this.invalidateDesktopStatus()
+      this.pushLog('warning', 'System proxy restored after Mihomo exited unexpectedly')
+    } catch (error) {
+      this.pushLog('error', `Unable to restore system proxy after Mihomo exit: ${this.errorMessage(error)}`)
     }
   }
 
@@ -388,6 +493,7 @@ export class RelayCoreService {
   }
 
   private pushLog(level: LogEntry['level'], message: string) {
+    this.fileLogger.write(level, message)
     this.logs = [...this.logs, {
       id: `log-${Date.now()}-${this.logs.length}`,
       level,

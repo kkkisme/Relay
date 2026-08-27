@@ -55,6 +55,30 @@ export type RelaySettings = {
   allowLan: boolean
   ipv6: boolean
   mode: ProxyMode
+  launchAtLogin: boolean
+}
+
+export type DesktopStatus = {
+  platform: string
+  systemProxy: {
+    supported: boolean
+    enabled: boolean
+    managed: boolean
+    error?: string
+  }
+  tun: {
+    supported: boolean
+    permission: 'granted' | 'required' | 'unavailable'
+    detail: string
+  }
+  launchAtLogin: {
+    supported: boolean
+    enabled: boolean
+  }
+  tray: {
+    supported: boolean
+    detail: string
+  }
 }
 
 export type TrafficMetrics = {
@@ -80,6 +104,7 @@ export type RelaySnapshot = {
   connections: Connection[]
   logs: LogEntry[]
   settings: RelaySettings
+  desktop: DesktopStatus
 }
 
 export type CoreMethodMap = {

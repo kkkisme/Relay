@@ -164,25 +164,28 @@ export function Toggle({
   value,
   onChange,
   testId,
+  disabled = false,
 }: {
   value: boolean
   onChange: (value: boolean) => void
   testId?: string
+  disabled?: boolean
 }) {
   return (
     <div
       testId={testId}
-      onClick={() => onChange(!value)}
+      onClick={() => !disabled && onChange(!value)}
       style={{
         width: 42,
         height: 24,
         padding: 3,
         borderRadius: 99,
-        cursor: 'pointer',
+        cursor: disabled ? 'default' : 'pointer',
         backgroundColor: value ? colors.accent : colors.borderStrong,
         alignItems: value ? 'flex-end' : 'flex-start',
         justifyContent: 'center',
-        hover: { opacity: 0.86 },
+        opacity: disabled ? 0.45 : 1,
+        hover: disabled ? {} : { opacity: 0.86 },
       }}
     >
       <div style={{ width: 18, height: 18, borderRadius: 99, backgroundColor: '#ffffff' }} />

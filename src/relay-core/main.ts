@@ -118,11 +118,16 @@ const publisher = setInterval(async () => {
 async function shutdown() {
   clearInterval(publisher)
   sockets.forEach((socket) => socket.destroy())
-  await service.stop()
-  server.close(() => {
-    if (process.platform !== 'win32' && existsSync(endpoint)) unlinkSync(endpoint)
-    process.exit(0)
-  })
+  try {
+    await service.stop()
+  } catch (error) {
+    service.reportError(`Shutdown cleanup failed: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    server.close(() => {
+      if (process.platform !== 'win32' && existsSync(endpoint)) unlinkSync(endpoint)
+      process.exit(0)
+    })
+  }
 }
 
 process.once('SIGINT', () => void shutdown())

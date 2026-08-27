@@ -2,11 +2,11 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import process from 'node:process'
 import { parse, stringify } from 'yaml'
 import { MihomoClient } from './mihomoClient'
+import { relayPaths } from './platformPaths'
 
 type LogSink = (level: 'debug' | 'info' | 'warning' | 'error', message: string) => void
 type ConfigSource = { path: string; homeDirectory: string; name: string }
@@ -32,7 +32,10 @@ export class MihomoProcess {
   private startedAt?: number
   private configPathValue = ''
 
-  constructor(private readonly log: LogSink) {}
+  constructor(
+    private readonly log: LogSink,
+    private readonly onUnexpectedExit?: () => void,
+  ) {}
 
   get running() {
     return Boolean(this.child && this.child.exitCode === null && !this.child.killed)
@@ -58,8 +61,7 @@ export class MihomoProcess {
     const port = Number(process.env.RELAY_MIHOMO_CONTROLLER_PORT) || await findFreePort()
     const controller = process.env.RELAY_MIHOMO_CONTROLLER ?? `http://127.0.0.1:${port}`
     const secret = process.env.RELAY_MIHOMO_SECRET ?? randomBytes(24).toString('hex')
-    const configDirectory = process.env.RELAY_MIHOMO_CONFIG_DIR
-      ?? join(homedir(), '.config', 'relay', 'mihomo')
+    const configDirectory = relayPaths().mihomo
     mkdirSync(configDirectory, { recursive: true })
 
     const suppliedConfig = source?.path ?? process.env.RELAY_MIHOMO_CONFIG
@@ -91,6 +93,7 @@ export class MihomoProcess {
       this.startedAt = undefined
       const detail = childSignal ? `signal ${childSignal}` : `code ${code ?? 'unknown'}`
       this.log(code === 0 ? 'info' : 'error', `Mihomo exited with ${detail}`)
+      this.onUnexpectedExit?.()
     })
 
     try {
