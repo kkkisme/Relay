@@ -1,4 +1,5 @@
 import type { ProxyGroup } from '../../core'
+import { useI18n } from '../../i18n'
 import type { RelayAction } from '../../state/useRelay'
 import { Badge, Button, Card, SectionHeader } from '../components'
 import { colors, FONT } from '../theme'
@@ -12,14 +13,15 @@ export function Proxies({
   busy: string | null
   dispatch: (action: RelayAction) => void
 }) {
+  const { t } = useI18n()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       {groups.map((group) => (
         <div key={group.id}>
           <SectionHeader
             title={group.name}
-            description={`${group.kind} · ${group.nodes.length} nodes`}
-            action={<Button disabled={busy !== null} onClick={() => dispatch({ type: 'test-proxies', groupId: group.id })}>{busy === 'test-proxies' ? 'Testing…' : 'Test latency'}</Button>}
+            description={t('proxies.nodes', { kind: group.kind, count: group.nodes.length })}
+            action={<Button disabled={busy !== null} onClick={() => dispatch({ type: 'test-proxies', groupId: group.id })}>{busy === 'test-proxies' ? t('proxies.testing') : t('proxies.testLatency')}</Button>}
           />
           <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
             {group.nodes.map((node) => {
@@ -42,11 +44,11 @@ export function Proxies({
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <text style={{ color: colors.text, fontFamily: FONT, fontSize: 14, fontWeight: 680 }}>{node.name}</text>
-                          {selected ? <Badge tone="accent">Active</Badge> : null}
+                          {selected ? <Badge tone="accent">{t('proxies.active')}</Badge> : null}
                         </div>
                         <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>{node.location} · {node.type.toUpperCase()}</text>
                         <text style={{ color: node.latency && node.latency < 100 ? colors.success : colors.warning, fontFamily: FONT, fontSize: 17, fontWeight: 700 }}>
-                          {node.latency ? `${node.latency} ms` : 'Not tested'}
+                          {node.latency ? `${node.latency} ms` : t('proxies.notTested')}
                         </text>
                       </div>
                     </Card>

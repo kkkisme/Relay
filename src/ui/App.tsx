@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { I18nProvider, useI18n } from '../i18n'
 import { useRelay } from '../state/useRelay'
 import { Badge, Button } from './components'
 import { Dashboard } from './pages/Dashboard'
@@ -10,19 +11,28 @@ import { Settings } from './pages/Settings'
 import { colors, FONT } from './theme'
 
 const pages = {
-  dashboard: { label: 'Dashboard', description: 'Traffic, status, and quick controls' },
-  proxies: { label: 'Proxies', description: 'Proxy groups, nodes, and latency' },
-  profiles: { label: 'Profiles', description: 'Subscriptions and local configurations' },
-  connections: { label: 'Connections', description: 'Inspect active network sessions' },
-  logs: { label: 'Logs', description: 'Mihomo runtime events' },
-  settings: { label: 'Settings', description: 'Runtime and application preferences' },
+  dashboard: { label: 'nav.dashboard', description: 'nav.dashboard.description' },
+  proxies: { label: 'nav.proxies', description: 'nav.proxies.description' },
+  profiles: { label: 'nav.profiles', description: 'nav.profiles.description' },
+  connections: { label: 'nav.connections', description: 'nav.connections.description' },
+  logs: { label: 'nav.logs', description: 'nav.logs.description' },
+  settings: { label: 'nav.settings', description: 'nav.settings.description' },
 } as const
 
 type PageId = keyof typeof pages
 
 export function App() {
+  return (
+    <I18nProvider>
+      <RelayApp />
+    </I18nProvider>
+  )
+}
+
+function RelayApp() {
   const [page, setPage] = useState<PageId>('dashboard')
   const { snapshot, loading, busy, error, dispatch } = useRelay()
+  const { t } = useI18n()
   const pageInfo = pages[page]
 
   return (
@@ -45,7 +55,7 @@ export function App() {
             <img src="assets/icon.png" alt="Relay" objectFit="cover" style={{ width: 34, height: 34, borderRadius: 9 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <text style={{ color: colors.text, fontFamily: FONT, fontSize: 19, fontWeight: 760 }}>Relay</text>
-              <text style={{ color: colors.textFaint, fontFamily: FONT, fontSize: 9 }}>NATIVE MIHOMO CLIENT</text>
+              <text style={{ color: colors.textFaint, fontFamily: FONT, fontSize: 9 }}>{t('app.tagline')}</text>
             </div>
           </div>
 
@@ -71,7 +81,7 @@ export function App() {
                   }}
                 >
                   <text style={{ color: active ? colors.accent : colors.textMuted, fontFamily: FONT, fontSize: 13, fontWeight: active ? 680 : 520 }}>
-                    {pages[item].label}
+                    {t(pages[item].label)}
                   </text>
                 </div>
               )
@@ -83,10 +93,10 @@ export function App() {
           <div style={{ display: 'flex', flexDirection: 'row', gap: 7, alignItems: 'center' }}>
             <div style={{ width: 7, height: 7, borderRadius: 99, backgroundColor: snapshot?.status.running ? colors.success : colors.danger }} />
             <text style={{ color: colors.text, fontFamily: FONT, fontSize: 11, fontWeight: 650 }}>
-              {snapshot?.status.running ? 'Core connected' : 'Core stopped'}
+              {snapshot?.status.running ? t('core.connected') : t('core.stopped')}
             </text>
           </div>
-          <text style={{ color: colors.textFaint, fontFamily: FONT, fontSize: 9 }}>{snapshot?.status.version ?? 'Connecting…'}</text>
+          <text style={{ color: colors.textFaint, fontFamily: FONT, fontSize: 9 }}>{snapshot?.status.version ?? t('core.connecting')}</text>
         </div>
       </div>
 
@@ -107,18 +117,18 @@ export function App() {
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <text style={{ color: colors.text, fontFamily: FONT, fontSize: 22, fontWeight: 740 }}>{pageInfo.label}</text>
-            <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>{pageInfo.description}</text>
+            <text style={{ color: colors.text, fontFamily: FONT, fontSize: 22, fontWeight: 740 }}>{t(pageInfo.label)}</text>
+            <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>{t(pageInfo.description)}</text>
           </div>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            {busy ? <Badge tone="accent">Applying…</Badge> : null}
+            {busy ? <Badge tone="accent">{t('core.applying')}</Badge> : null}
             {snapshot ? (
               <Button
                 tone={snapshot.status.running ? 'danger' : 'primary'}
                 disabled={busy !== null}
                 onClick={() => dispatch({ type: 'set-running', running: !snapshot.status.running })}
               >
-                {snapshot.status.running ? 'Stop core' : 'Start core'}
+                {snapshot.status.running ? t('core.stop') : t('core.start')}
               </Button>
             ) : null}
           </div>
@@ -132,8 +142,8 @@ export function App() {
           ) : null}
           {loading || !snapshot ? (
             <div style={{ paddingTop: 80, alignItems: 'center', gap: 8 }}>
-              <text style={{ color: colors.text, fontFamily: FONT, fontSize: 16, fontWeight: 680 }}>Connecting to Relay Core…</text>
-              <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 12 }}>Preparing the local control plane</text>
+              <text style={{ color: colors.text, fontFamily: FONT, fontSize: 16, fontWeight: 680 }}>{t('core.connecting.title')}</text>
+              <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 12 }}>{t('core.connecting.detail')}</text>
             </div>
           ) : (
             <PageContent page={page} snapshot={snapshot} busy={busy} dispatch={dispatch} />

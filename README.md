@@ -16,6 +16,7 @@ The first control-plane milestone is implemented:
 - Dashboard traffic metrics and runtime controls
 - Proxy selection and latency testing
 - Profile activation, connection management, logs, and settings
+- Simplified Chinese by default with live Simplified Chinese/English switching
 - Strictly typed RPC contract and replaceable transport boundary
 - In-memory Mock Core for UI development before the native transport lands
 

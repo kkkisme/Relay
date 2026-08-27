@@ -1,14 +1,22 @@
 import type { RelaySettings } from '../../core'
+import { useI18n } from '../../i18n'
 import type { RelayAction } from '../../state/useRelay'
 import { Card, SectionHeader, Toggle } from '../components'
 import { colors, FONT } from '../theme'
 
+const modeLabels = {
+  rule: 'settings.mode.rule',
+  global: 'settings.mode.global',
+  direct: 'settings.mode.direct',
+} as const
+
 export function Settings({ settings, dispatch }: { settings: RelaySettings; dispatch: (action: RelayAction) => void }) {
+  const { locale, setLocale, t } = useI18n()
   const update = (next: Partial<RelaySettings>) => dispatch({ type: 'update-settings', settings: next })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div>
-        <SectionHeader title="Proxy mode" description="Choose how Mihomo evaluates traffic" />
+        <SectionHeader title={t('settings.proxyMode')} description={t('settings.proxyMode.detail')} />
         <Card>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
             {(['rule', 'global', 'direct'] as const).map((mode) => (
@@ -28,7 +36,7 @@ export function Settings({ settings, dispatch }: { settings: RelaySettings; disp
                 }}
               >
                 <text style={{ color: settings.mode === mode ? colors.accent : colors.text, fontFamily: FONT, fontSize: 13, fontWeight: 680 }}>
-                  {mode[0].toUpperCase() + mode.slice(1)}
+                  {t(modeLabels[mode])}
                 </text>
               </div>
             ))}
@@ -37,23 +45,58 @@ export function Settings({ settings, dispatch }: { settings: RelaySettings; disp
       </div>
 
       <div>
-        <SectionHeader title="Network" description="Runtime networking features" />
+        <SectionHeader title={t('settings.network')} description={t('settings.network.detail')} />
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SettingRow title="System proxy" detail="Route supported application traffic through Relay" value={settings.systemProxy} onChange={(systemProxy) => update({ systemProxy })} />
-            <SettingRow title="TUN mode" detail="Capture traffic at the network interface level" value={settings.tun} onChange={(tun) => update({ tun })} />
-            <SettingRow title="Allow LAN" detail="Accept proxy connections from devices on the local network" value={settings.allowLan} onChange={(allowLan) => update({ allowLan })} />
-            <SettingRow title="IPv6" detail="Enable IPv6 resolution and outbound connections" value={settings.ipv6} onChange={(ipv6) => update({ ipv6 })} />
+            <SettingRow title={t('settings.systemProxy')} detail={t('settings.systemProxy.detail')} value={settings.systemProxy} onChange={(systemProxy) => update({ systemProxy })} />
+            <SettingRow title={t('settings.tun')} detail={t('settings.tun.detail')} value={settings.tun} onChange={(tun) => update({ tun })} />
+            <SettingRow title={t('settings.allowLan')} detail={t('settings.allowLan.detail')} value={settings.allowLan} onChange={(allowLan) => update({ allowLan })} />
+            <SettingRow title={t('settings.ipv6')} detail={t('settings.ipv6.detail')} value={settings.ipv6} onChange={(ipv6) => update({ ipv6 })} />
           </div>
         </Card>
       </div>
 
       <div>
-        <SectionHeader title="About" />
+        <SectionHeader title={t('settings.language')} description={t('settings.language.detail')} />
+        <Card>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 10 }}>
+            {([
+              { id: 'zh-CN', label: 'settings.language.zhCN' },
+              { id: 'en', label: 'settings.language.en' },
+            ] as const).map((item) => {
+              const active = locale === item.id
+              return (
+                <div
+                  key={item.id}
+                  testId={`language-${item.id}`}
+                  onClick={() => setLocale(item.id)}
+                  style={{
+                    flexGrow: 1,
+                    padding: 14,
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    backgroundColor: active ? colors.accentWash : colors.surfaceRaised,
+                    borderWidth: 1,
+                    borderColor: active ? colors.accent : colors.border,
+                    hover: { borderColor: colors.borderStrong },
+                  }}
+                >
+                  <text style={{ color: active ? colors.accent : colors.text, fontFamily: FONT, fontSize: 13, fontWeight: 680 }}>
+                    {t(item.label)}
+                  </text>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      </div>
+
+      <div>
+        <SectionHeader title={t('settings.about')} />
         <Card>
           <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
             <text style={{ color: colors.text, fontFamily: FONT, fontSize: 13 }}>Relay 0.1.0</text>
-            <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 12 }}>GPUIX · React 19 · Mihomo</text>
+            <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 12 }}>{t('settings.stack')}</text>
           </div>
         </Card>
       </div>

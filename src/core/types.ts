@@ -20,7 +20,7 @@ export type ProxyGroup = {
 export type Profile = {
   id: string
   name: string
-  source: string
+  source: 'remote' | 'local'
   active: boolean
   updatedAt: string
   proxies: number

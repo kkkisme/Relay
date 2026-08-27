@@ -1,22 +1,24 @@
 import type { Connection } from '../../core'
+import { useI18n } from '../../i18n'
 import type { RelayAction } from '../../state/useRelay'
 import { Button, Card, EmptyState, SectionHeader } from '../components'
 import { colors, FONT } from '../theme'
 
 export function Connections({ connections, dispatch }: { connections: Connection[]; dispatch: (action: RelayAction) => void }) {
+  const { t } = useI18n()
   return (
     <div>
       <SectionHeader
-        title="Active connections"
-        description={`${connections.length} sessions currently tracked`}
-        action={<Button tone="danger" disabled={connections.length === 0} onClick={() => dispatch({ type: 'close-all-connections' })}>Close all</Button>}
+        title={t('connections.title')}
+        description={t('connections.description', { count: connections.length })}
+        action={<Button tone="danger" disabled={connections.length === 0} onClick={() => dispatch({ type: 'close-all-connections' })}>{t('connections.closeAll')}</Button>}
       />
       {connections.length === 0 ? (
-        <EmptyState title="No active connections" detail="New network sessions will appear here." />
+        <EmptyState title={t('connections.empty')} detail={t('connections.empty.detail')} />
       ) : (
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Row muted values={['Host / process', 'Traffic', 'Rule / chain', 'Duration', '']} />
+            <Row muted values={[t('connections.hostProcess'), t('connections.traffic'), t('connections.ruleChain'), t('connections.duration'), '']} />
             {connections.map((connection) => (
               <div key={connection.id} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', paddingTop: 11, paddingBottom: 11, borderTopWidth: 1, borderColor: colors.border }}>
                 <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -29,7 +31,7 @@ export function Connections({ connections, dispatch }: { connections: Connection
                   <text style={{ color: colors.textFaint, fontFamily: FONT, fontSize: 10 }}>{connection.chain}</text>
                 </div>
                 <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11, width: 70 }}>{connection.duration}</text>
-                <Button tone="danger" onClick={() => dispatch({ type: 'close-connection', connectionId: connection.id })}>Close</Button>
+                <Button tone="danger" onClick={() => dispatch({ type: 'close-connection', connectionId: connection.id })}>{t('connections.close')}</Button>
               </div>
             ))}
           </div>

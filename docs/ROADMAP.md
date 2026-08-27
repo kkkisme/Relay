@@ -11,6 +11,7 @@ Relay follows a vertical-slice plan: keep the native UI usable with a Mock Core,
 ## Phase 1 — Native control plane ✅
 
 - Build Dashboard, Proxies, Profiles, Connections, Logs, and Settings
+- Add Simplified Chinese and English interface localization
 - Define typed domain models and RPC methods
 - Add a replaceable `CoreTransport` interface
 - Add Mock Core state, events, and mutations for independent UI work

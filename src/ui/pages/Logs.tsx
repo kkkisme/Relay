@@ -1,14 +1,16 @@
 import type { LogEntry } from '../../core'
+import { useI18n } from '../../i18n'
 import type { RelayAction } from '../../state/useRelay'
 import { Badge, Button, Card, EmptyState, SectionHeader } from '../components'
 import { colors, FONT, MONO } from '../theme'
 
 export function Logs({ logs, dispatch }: { logs: LogEntry[]; dispatch: (action: RelayAction) => void }) {
+  const { t } = useI18n()
   return (
     <div>
-      <SectionHeader title="Core logs" description="Runtime events from the Mihomo boundary" action={<Button disabled={logs.length === 0} onClick={() => dispatch({ type: 'clear-logs' })}>Clear</Button>} />
+      <SectionHeader title={t('logs.title')} description={t('logs.description')} action={<Button disabled={logs.length === 0} onClick={() => dispatch({ type: 'clear-logs' })}>{t('logs.clear')}</Button>} />
       {logs.length === 0 ? (
-        <EmptyState title="Logs cleared" detail="New runtime events will appear here." />
+        <EmptyState title={t('logs.empty')} detail={t('logs.empty.detail')} />
       ) : (
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
