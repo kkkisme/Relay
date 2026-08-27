@@ -1,7 +1,11 @@
 import { CoreClient } from './client'
 import { MockCoreTransport } from './mockTransport'
+import { ProcessCoreTransport } from './processTransport'
 
-// Swap MockCoreTransport for the named-pipe/Unix-socket transport when Relay Core lands.
-export const coreClient = new CoreClient(new MockCoreTransport())
+const transport = process.env.RELAY_CORE_MODE === 'mock'
+  ? new MockCoreTransport()
+  : new ProcessCoreTransport()
+
+export const coreClient = new CoreClient(transport)
 
 export * from './types'

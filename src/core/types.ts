@@ -4,7 +4,7 @@ export type LogLevel = 'debug' | 'info' | 'warning' | 'error'
 export type ProxyNode = {
   id: string
   name: string
-  type: 'ss' | 'vmess' | 'trojan' | 'hysteria2'
+  type: string
   location: string
   latency: number | null
 }
@@ -12,7 +12,7 @@ export type ProxyNode = {
 export type ProxyGroup = {
   id: string
   name: string
-  kind: 'select' | 'url-test' | 'fallback'
+  kind: string
   selectedNodeId: string
   nodes: ProxyNode[]
 }

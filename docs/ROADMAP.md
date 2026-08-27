@@ -17,13 +17,15 @@ Relay follows a vertical-slice plan: keep the native UI usable with a Mock Core,
 - Add Mock Core state, events, and mutations for independent UI work
 - Validate with strict TypeScript and a standalone Bun build
 
-## Phase 2 — Relay Core transport
+## Phase 2 — Relay Core transport ✅
 
 - Start and supervise the Relay Core child process
 - Implement newline-delimited RPC over named pipes on Windows and Unix sockets on macOS/Linux
 - Add connection lifecycle, request timeouts, cancellation, and reconnect backoff
 - Stream core events, traffic metrics, connections, and logs to the UI
 - Keep the Mock Core available for development and deterministic tests
+
+Relay Core is compiled as a separate Bun executable. It owns Mihomo's lifecycle and is the only process allowed to call the Mihomo controller API.
 
 ## Phase 3 — Mihomo feature integration
 

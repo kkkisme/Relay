@@ -10,17 +10,20 @@ Relay is an experimental desktop-first proxy client built with React, TypeScript
 
 ## Current milestone
 
-The first control-plane milestone is implemented:
+The Relay Core transport milestone is implemented:
 
 - Native GPUIX application shell with six working sections
 - Dashboard traffic metrics and runtime controls
 - Proxy selection and latency testing
 - Profile activation, connection management, logs, and settings
 - Simplified Chinese by default with live Simplified Chinese/English switching
-- Strictly typed RPC contract and replaceable transport boundary
-- In-memory Mock Core for UI development before the native transport lands
+- Strictly typed, newline-delimited RPC contract with timeouts and cancellation
+- Standalone Relay Core process with reconnect backoff and Mihomo supervision
+- Unix sockets on macOS/Linux and named pipes on Windows
+- Live Mihomo metrics, proxy groups, connections, runtime settings, and process logs
+- In-memory Mock Core retained for deterministic UI development
 
-The next milestone replaces `MockCoreTransport` with the named-pipe/Unix-socket transport and connects the UI to the real Relay Core process. See [the roadmap](docs/ROADMAP.md).
+The next milestone adds profile import, validation, activation, update, and rollback. See [the roadmap](docs/ROADMAP.md).
 
 ## Architecture
 
@@ -55,6 +58,7 @@ The desktop core is intentionally separated from the UI. Every operation crosses
 Requirements:
 
 - Bun
+- A Mihomo executable placed beside Relay or configured with `RELAY_MIHOMO_BINARY`
 
 Install dependencies:
 
@@ -68,18 +72,33 @@ Run Relay with hot remount:
 bun run dev
 ```
 
+`bun run dev` first builds the standalone Relay Core. Relay Core starts Mihomo automatically and creates a minimal bootstrap configuration when no profile has been supplied. To use an existing configuration, set `RELAY_MIHOMO_CONFIG` and make sure its `external-controller` and `secret` match `RELAY_MIHOMO_CONTROLLER` and `RELAY_MIHOMO_SECRET`.
+
+Useful environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `RELAY_MIHOMO_BINARY` | Absolute path to the Mihomo executable |
+| `RELAY_MIHOMO_CONFIG` | Existing Mihomo YAML configuration |
+| `RELAY_MIHOMO_CONFIG_DIR` | Mihomo working/configuration directory |
+| `RELAY_MIHOMO_CONTROLLER` | Controller URL, defaulting to a random loopback port |
+| `RELAY_MIHOMO_SECRET` | Controller bearer token, random by default |
+| `RELAY_MIHOMO_AUTO_START=0` | Start Relay Core without starting Mihomo |
+| `RELAY_CORE_MODE=mock` | Use the in-memory Mock Core instead of the child process |
+
 Validate the project:
 
 ```bash
 bun run typecheck
+bun test
 bun run build
 ```
 
-The standalone executable is written to `dist/relay` (`dist/relay.exe` on Windows).
+The standalone executables are written to `dist/relay` and `dist/relay-core` (`.exe` on Windows).
 
 ## Status
 
-Relay is in early development. The native UI control plane and typed Core SDK boundary are ready; the real core transport is the next implementation target.
+Relay is in early development. The native control plane now runs against a real supervised Mihomo process; profile lifecycle and desktop OS integration remain under development.
 
 ## License
 
