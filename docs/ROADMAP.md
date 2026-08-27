@@ -43,16 +43,19 @@ Profiles are copied into Relay-managed storage, validated by Mihomo before use, 
 - [x] System proxy lifecycle with crash recovery
 - [x] TUN installation, permissions, and state management through the constrained Relay Helper
 - [ ] Tray menu, launch at login, and background operation (launch at login is implemented; GPUIX tray/window APIs remain)
-- [ ] Platform-specific paths, logs, and update handling (paths and rotating logs are implemented; update handling remains)
+- [x] Platform-specific paths and rotating logs
+- [x] Keep application upgrades release-driven instead of adding an in-app updater
 
 System proxy changes are preceded by an atomic recovery marker containing the exact previous state. Normal shutdown, Mihomo failure, and the next Relay Core launch all attempt restoration. See [desktop integration notes](DESKTOP_INTEGRATION.md).
 
-## Phase 5 — Release quality
+## Phase 5 — Release quality ◐
 
 - GPU renderer interaction tests for critical flows
 - Core contract and transport integration tests
-- Windows, macOS, and Linux packaging
-- Signed artifacts, release automation, and upgrade migration
+- [x] Directly installable unsigned Windows x64 package with bundled Mihomo
+- [x] GitHub Release automation, SHA-256 checksums, and clean-install smoke test
+- [ ] macOS and Linux packaging
+- [ ] Optional signed artifacts and upgrade migration
 - Performance, accessibility, and failure-recovery passes
 
 ## Architecture rule

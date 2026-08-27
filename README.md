@@ -6,6 +6,12 @@
 
 <p align="center">A fast native Mihomo desktop client powered by GPUIX.</p>
 
+## Download
+
+Ready-to-run preview builds are available from [GitHub Releases](https://github.com/kkkisme/Relay/releases). The Windows x64 installer bundles Relay Core, Relay Helper, and Mihomo, so no separate runtime setup is required.
+
+The current preview is not code-signed. Windows may show an unknown publisher or SmartScreen warning during installation.
+
 Relay is an experimental desktop-first proxy client built with React, TypeScript, and [GPUIX](https://github.com/remorses/gpuix). The UI renders natively through Zed's GPUI stack rather than Electron or a WebView.
 
 ## Current milestone
@@ -32,7 +38,7 @@ The Mihomo feature-integration milestone is implemented, and the first desktop-i
 - Launch-at-login registration for Windows, macOS, and XDG desktops
 - In-memory Mock Core retained for deterministic UI development
 
-The remaining desktop work is tray/background-window behavior and update handling. The installed GPUIX release does not yet expose tray or window hide/show APIs, so Relay reports that boundary explicitly instead of emulating an Electron API. See [the roadmap](docs/ROADMAP.md) and [desktop integration notes](docs/DESKTOP_INTEGRATION.md).
+The remaining desktop work is tray/background-window behavior. The installed GPUIX release does not yet expose tray or window hide/show APIs, so Relay reports that boundary explicitly instead of emulating an Electron API. See [the roadmap](docs/ROADMAP.md) and [desktop integration notes](docs/DESKTOP_INTEGRATION.md).
 
 ## Architecture
 
@@ -111,7 +117,7 @@ The standalone executables are written to `dist/relay` and `dist/relay-core` (`.
 
 ## Status
 
-Relay is in early development. The native control plane, real Relay Core transport, managed Mihomo profile lifecycle, recoverable system-proxy integration, and privileged TUN runtime are implemented. Tray/background behavior, application updates, packaging, and release hardening remain under development.
+Relay is in early development. The native control plane, real Relay Core transport, managed Mihomo profile lifecycle, recoverable system-proxy integration, privileged TUN runtime, and first installable Windows release are implemented. Tray/background behavior and release hardening remain under development.
 
 ## License
 

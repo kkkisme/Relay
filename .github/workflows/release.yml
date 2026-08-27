@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+      - packaging/**
+      - assets/icon.ico
+      - package.json
+      - THIRD_PARTY_NOTICES.md
+
+permissions:
+  contents: write
+
+concurrency:
+  group: relay-release
+  cancel-in-progress: false
+
+env:
+  MIHOMO_VERSION: v1.19.30
+
+jobs:
+  windows-x64:
+    name: Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "RELAY_VERSION=$version" >> $env:GITHUB_ENV
+          "RELAY_TAG=v$version" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate source
+        run: |
+          bun run typecheck
+          bun test
+
+      - name: Build Windows executables
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $fileVersion = "$env:RELAY_VERSION.0"
+          bun build --compile src/main.tsx --outfile dist/relay.exe --windows-hide-console --windows-icon=assets/icon.ico --windows-title=Relay --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay Mihomo desktop client"
+          bun build --compile src/relay-core/main.ts --outfile dist/relay-core.exe --windows-hide-console --windows-title="Relay Core" --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay Core service"
+          bun build --compile src/relay-helper/main.ts --outfile dist/relay-helper.exe --windows-hide-console --windows-title="Relay Helper" --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay privileged TUN helper"
+
+      - name: Bundle Mihomo
+        shell: pwsh
+        run: |
+          $asset = "mihomo-windows-amd64-compatible-$env:MIHOMO_VERSION.zip"
+          $url = "https://github.com/MetaCubeX/mihomo/releases/download/$env:MIHOMO_VERSION/$asset"
+          Invoke-WebRequest -Uri $url -OutFile mihomo.zip
+          Expand-Archive mihomo.zip -DestinationPath mihomo-package -Force
+          $binary = Get-ChildItem mihomo-package -Recurse -Filter '*.exe' | Select-Object -First 1
+          if (-not $binary) { throw 'Mihomo executable was not found in the official archive.' }
+          Copy-Item $binary.FullName dist/mihomo.exe
+          & dist/mihomo.exe -v
+
+      - name: Build installer and portable archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+          & $iscc "/DRelayVersion=$env:RELAY_VERSION" packaging/windows/relay.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
+
+          $portable = "release/Relay-$env:RELAY_VERSION-windows-x64-portable"
+          New-Item -ItemType Directory -Force $portable | Out-Null
+          Copy-Item dist/*.exe $portable
+          Copy-Item LICENSE,THIRD_PARTY_NOTICES.md $portable
+          Compress-Archive -Path "$portable/*" -DestinationPath "$portable.zip" -CompressionLevel Optimal
+          Remove-Item $portable -Recurse -Force
+
+      - name: Verify clean installation and startup
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Relay installer was not generated.' }
+          $process = Start-Process $installer.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Relay installer exited with code $($process.ExitCode)" }
+
+          $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Relay'
+          foreach ($name in 'relay.exe','relay-core.exe','relay-helper.exe','mihomo.exe') {
+            if (-not (Test-Path (Join-Path $installRoot $name))) { throw "Installed file is missing: $name" }
+          }
+
+          $app = Start-Process (Join-Path $installRoot 'relay.exe') -PassThru
+          Start-Sleep -Seconds 12
+          if ($app.HasExited) { throw "Installed Relay exited during startup with code $($app.ExitCode)" }
+          if (-not (Get-Process -Name 'relay-core' -ErrorAction SilentlyContinue)) { throw 'Installed Relay did not start Relay Core.' }
+          if (-not (Get-Process -Name 'mihomo' -ErrorAction SilentlyContinue)) { throw 'Installed Relay Core did not start Mihomo.' }
+
+          Get-Process -Name 'relay','relay-core','mihomo' -ErrorAction SilentlyContinue | Stop-Process -Force
+          $uninstaller = Join-Path $installRoot 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Relay uninstaller is missing.' }
+
+      - name: Write checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem release -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content release/SHA256SUMS.txt
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relay-${{ env.RELAY_VERSION }}-windows-x64
+          path: release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @"
+          Relay $env:RELAY_VERSION is the first directly installable preview.
+
+          Included:
+          - Relay native GPUIX desktop client
+          - Relay Core and privileged TUN Helper
+          - Mihomo $env:MIHOMO_VERSION
+          - Simplified Chinese and English UI
+
+          Download `Relay-$env:RELAY_VERSION-windows-x64-setup.exe` for normal installation. The portable ZIP contains the same runtime files.
+
+          This preview is not code-signed. Windows SmartScreen may display an unknown publisher warning.
+          "@
+          $files = Get-ChildItem release -File | ForEach-Object FullName
+          gh release view $env:RELAY_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELAY_TAG $files --clobber
+          } else {
+            gh release create $env:RELAY_TAG $files --target $env:GITHUB_SHA --title "Relay $env:RELAY_TAG" --prerelease --notes $notes
+          }
+
