@@ -7,6 +7,7 @@ export type ProxyNode = {
   type: string
   location: string
   latency: number | null
+  error?: string
 }
 
 export type ProxyGroup = {
@@ -25,6 +26,9 @@ export type Profile = {
   updatedAt: string
   proxies: number
   rules: number
+  revision: number
+  canUpdate: boolean
+  canRollback: boolean
 }
 
 export type Connection = {
@@ -84,6 +88,12 @@ export type CoreMethodMap = {
   'proxy.select': { arguments: { groupId: string; nodeId: string }; result: RelaySnapshot }
   'proxy.test': { arguments: { groupId: string }; result: RelaySnapshot }
   'profile.activate': { arguments: { profileId: string }; result: RelaySnapshot }
+  'profile.import': {
+    arguments: { name: string; source: 'remote' | 'local'; location: string }
+    result: RelaySnapshot
+  }
+  'profile.update': { arguments: { profileId: string }; result: RelaySnapshot }
+  'profile.rollback': { arguments: { profileId: string }; result: RelaySnapshot }
   'connection.close': { arguments: { connectionId: string }; result: RelaySnapshot }
   'connection.close-all': { arguments: undefined; result: RelaySnapshot }
   'settings.update': { arguments: Partial<RelaySettings>; result: RelaySnapshot }

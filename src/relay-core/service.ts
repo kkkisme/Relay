@@ -4,11 +4,15 @@ import type {
   CoreMethodMap,
   LogEntry,
   ProxyGroup,
+  Profile,
   RelaySettings,
   RelaySnapshot,
 } from '../core/types'
+import { basename, extname } from 'node:path'
 import type { MihomoConnection, MihomoProxy, MihomoSnapshot } from './mihomoClient'
 import { MihomoProcess } from './mihomoProcess'
+import { ProfileStore, type ConfigTarget } from './profileStore'
+import { SettingsStore } from './settingsStore'
 
 const bytesPerGiB = 1024 ** 3
 const bytesPerMiB = 1024 ** 2
@@ -58,26 +62,33 @@ function asConnection(connection: MihomoConnection): Connection {
 
 export class RelayCoreService {
   private readonly process: MihomoProcess
+  private readonly profiles: ProfileStore
+  private readonly settingsStore: SettingsStore
+  private readonly runtimeProfileName: string
+  private readonly runtimeProfileUpdatedAt = new Date().toISOString()
   private logs: LogEntry[] = []
-  private settings: RelaySettings = {
-    systemProxy: false,
-    tun: false,
-    allowLan: false,
-    ipv6: false,
-    mode: 'rule',
-  }
+  private settings: RelaySettings
   private delays = new Map<string, number>()
+  private delayErrors = new Set<string>()
   private previousTotals?: { at: number; upload: number; download: number }
 
   constructor() {
     this.process = new MihomoProcess((level, message) => this.pushLog(level, message))
+    this.profiles = new ProfileStore((path, homeDirectory, signal) =>
+      this.process.validateConfig(path, homeDirectory, signal))
+    this.settingsStore = new SettingsStore()
+    this.settings = this.settingsStore.get()
+    const configuredProfile = process.env.RELAY_MIHOMO_CONFIG
+    this.runtimeProfileName = configuredProfile
+      ? basename(configuredProfile, extname(configuredProfile))
+      : 'Relay Runtime'
     this.pushLog('info', 'Relay Core process started')
   }
 
   async autoStart() {
     if (process.env.RELAY_MIHOMO_AUTO_START === '0') return
     try {
-      await this.process.start()
+      await this.startSelectedProfile()
     } catch (error) {
       this.pushLog('error', error instanceof Error ? error.message : String(error))
     }
@@ -101,7 +112,7 @@ export class RelayCoreService {
         break
       case 'core.set-running': {
         const { running } = argumentsValue as CoreMethodMap['core.set-running']['arguments']
-        if (running) await this.process.start(signal)
+        if (running) await this.startSelectedProfile(signal)
         else await this.process.stop()
         break
       }
@@ -113,14 +124,38 @@ export class RelayCoreService {
       }
       case 'proxy.test': {
         const { groupId } = argumentsValue as CoreMethodMap['proxy.test']['arguments']
+        const before = await this.process.client.snapshot(signal)
         const result = await this.process.client.testGroup(groupId, signal)
-        Object.entries(result).forEach(([name, value]) => this.delays.set(name, value))
+        Object.entries(result).forEach(([name, value]) => {
+          this.delays.set(name, value)
+          this.delayErrors.delete(name)
+        })
+        const group = before.proxies.proxies?.[groupId]
+        group?.all?.forEach((name) => {
+          if (!(name in result)) this.delayErrors.add(name)
+        })
         this.pushLog('debug', `Completed latency test for ${groupId}`)
         break
       }
       case 'profile.activate': {
         const { profileId } = argumentsValue as CoreMethodMap['profile.activate']['arguments']
-        if (profileId !== 'runtime') throw new Error('Profile management is not available until Phase 3')
+        await this.activateProfile(profileId, signal)
+        break
+      }
+      case 'profile.import': {
+        const input = argumentsValue as CoreMethodMap['profile.import']['arguments']
+        const imported = await this.profiles.importProfile(input, signal)
+        this.pushLog('info', `Imported and validated profile ${imported.name}`)
+        break
+      }
+      case 'profile.update': {
+        const { profileId } = argumentsValue as CoreMethodMap['profile.update']['arguments']
+        await this.updateProfile(profileId, signal)
+        break
+      }
+      case 'profile.rollback': {
+        const { profileId } = argumentsValue as CoreMethodMap['profile.rollback']['arguments']
+        await this.rollbackProfile(profileId, signal)
         break
       }
       case 'connection.close': {
@@ -135,7 +170,7 @@ export class RelayCoreService {
       case 'settings.update': {
         const next = argumentsValue as CoreMethodMap['settings.update']['arguments']
         if (this.process.running) await this.process.client.updateSettings(next, signal)
-        this.settings = { ...this.settings, ...next }
+        this.settings = this.settingsStore.update(next)
         this.pushLog('info', 'Runtime settings updated')
         break
       }
@@ -168,7 +203,7 @@ export class RelayCoreService {
         connections: 0,
       },
       proxyGroups: [],
-      profiles: [],
+      profiles: this.profileList(),
       connections: [],
       logs: [...this.logs],
       settings: { ...this.settings },
@@ -204,15 +239,7 @@ export class RelayCoreService {
         connections: connections.length,
       },
       proxyGroups: groups,
-      profiles: [{
-        id: 'runtime',
-        name: this.process.configName,
-        source: 'local',
-        active: true,
-        updatedAt: new Date().toISOString(),
-        proxies: leafProxyCount,
-        rules: source.rules.rules?.length ?? 0,
-      }],
+      profiles: this.profileList(leafProxyCount, source.rules.rules?.length ?? 0),
       connections,
       logs: [...this.logs],
       settings: { ...this.settings },
@@ -235,6 +262,7 @@ export class RelayCoreService {
             type: proxy.type.toLowerCase(),
             location: locationFromName(name),
             latency: this.delays.get(name) ?? proxyLatency(proxy),
+            error: this.delayErrors.has(name) ? 'Latency test failed' : undefined,
           }
         }),
       }))
@@ -252,6 +280,111 @@ export class RelayCoreService {
       ipv6: typeof configs.ipv6 === 'boolean' ? configs.ipv6 : this.settings.ipv6,
       mode: mode === 'global' || mode === 'direct' ? mode : 'rule',
     }
+  }
+
+  private async startSelectedProfile(signal?: AbortSignal) {
+    const target = this.profiles.activeConfig()
+    await this.launch(target, signal)
+  }
+
+  private async activateProfile(profileId: string, signal?: AbortSignal) {
+    const previous = this.profiles.activeConfig()
+    const next = profileId === 'runtime'
+      ? this.profiles.activate(undefined)
+      : this.profiles.activate(profileId)
+    if (!this.process.running) {
+      this.pushLog('info', `Selected profile ${next?.name ?? this.runtimeProfileName}`)
+      return
+    }
+
+    await this.process.stop()
+    try {
+      await this.launch(next, signal)
+      this.pushLog('info', `Activated profile ${next?.name ?? this.runtimeProfileName}`)
+    } catch (error) {
+      this.profiles.activate(previous?.profileId)
+      await this.restoreProcess(previous)
+      throw new Error(`Profile activation failed; previous profile restored. ${this.errorMessage(error)}`)
+    }
+  }
+
+  private async updateProfile(profileId: string, signal?: AbortSignal) {
+    const previous = this.profiles.config(profileId)
+    const next = await this.profiles.update(profileId, signal)
+    if (this.process.running && this.profiles.activeConfig()?.profileId === profileId) {
+      await this.process.stop()
+      try {
+        await this.launch(next, signal)
+      } catch (error) {
+        this.profiles.selectRevision(profileId, previous.revision)
+        await this.restoreProcess(previous)
+        throw new Error(`Profile update failed; revision ${previous.revision} restored. ${this.errorMessage(error)}`)
+      }
+    }
+    this.pushLog('info', `Updated profile ${next.name} to revision ${next.revision}`)
+  }
+
+  private async rollbackProfile(profileId: string, signal?: AbortSignal) {
+    const previous = this.profiles.config(profileId)
+    const next = this.profiles.rollback(profileId)
+    if (this.process.running && this.profiles.activeConfig()?.profileId === profileId) {
+      await this.process.stop()
+      try {
+        await this.launch(next, signal)
+      } catch (error) {
+        this.profiles.selectRevision(profileId, previous.revision)
+        await this.restoreProcess(previous)
+        throw new Error(`Profile rollback failed; revision ${previous.revision} restored. ${this.errorMessage(error)}`)
+      }
+    }
+    this.pushLog('warning', `Rolled back profile ${next.name} to revision ${next.revision}`)
+  }
+
+  private async restoreProcess(target?: ConfigTarget) {
+    try {
+      await this.launch(target)
+    } catch (error) {
+      this.pushLog('error', `Unable to restore previous profile: ${this.errorMessage(error)}`)
+    }
+  }
+
+  private processTarget(target: ConfigTarget) {
+    return { path: target.path, homeDirectory: target.homeDirectory, name: target.name }
+  }
+
+  private async launch(target?: ConfigTarget, signal?: AbortSignal) {
+    await this.process.start(signal, target ? this.processTarget(target) : undefined)
+    try {
+      await this.process.client.updateSettings(this.settings, signal)
+    } catch (error) {
+      await this.process.stop()
+      throw error
+    }
+  }
+
+  private profileList(runtimeProxies = 0, runtimeRules = 0): Profile[] {
+    const stored = this.profiles.list()
+    const hasManagedActive = stored.some((profile) => profile.active)
+    return [{
+      id: 'runtime',
+      name: this.runtimeProfileName,
+      source: 'local',
+      active: !hasManagedActive,
+      updatedAt: this.runtimeProfileUpdatedAt,
+      proxies: hasManagedActive ? 0 : runtimeProxies,
+      rules: hasManagedActive ? 0 : runtimeRules,
+      revision: 1,
+      canUpdate: false,
+      canRollback: false,
+    }, ...stored.map((profile) => hasManagedActive && profile.active ? {
+      ...profile,
+      proxies: runtimeProxies || profile.proxies,
+      rules: runtimeRules || profile.rules,
+    } : profile)]
+  }
+
+  private errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : String(error)
   }
 
   private pushLog(level: LogEntry['level'], message: string) {

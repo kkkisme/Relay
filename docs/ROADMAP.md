@@ -27,7 +27,7 @@ Relay follows a vertical-slice plan: keep the native UI usable with a Mock Core,
 
 Relay Core is compiled as a separate Bun executable. It owns Mihomo's lifecycle and is the only process allowed to call the Mihomo controller API.
 
-## Phase 3 — Mihomo feature integration
+## Phase 3 — Mihomo feature integration ✅
 
 - Import remote subscriptions and local YAML profiles
 - Validate, activate, update, and roll back configurations
@@ -35,6 +35,8 @@ Relay Core is compiled as a separate Bun executable. It owns Mihomo's lifecycle 
 - Run URL tests and surface errors per node
 - Query and close live connections
 - Persist user settings safely
+
+Profiles are copied into Relay-managed storage, validated by Mihomo before use, and tracked as immutable revisions. Active-profile failures automatically restore the last working revision.
 
 ## Phase 4 — Desktop integration
 

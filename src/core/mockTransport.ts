@@ -54,6 +54,9 @@ const initialSnapshot: RelaySnapshot = {
       updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
       proxies: 42,
       rules: 11834,
+      revision: 3,
+      canUpdate: true,
+      canRollback: true,
     },
     {
       id: 'office',
@@ -63,6 +66,9 @@ const initialSnapshot: RelaySnapshot = {
       updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       proxies: 8,
       rules: 294,
+      revision: 1,
+      canUpdate: true,
+      canRollback: false,
     },
   ],
   connections: [
@@ -156,6 +162,43 @@ export class MockCoreTransport implements CoreTransport {
           profile.active = profile.id === profileId
         })
         this.pushLog('info', 'Profile activated and configuration reloaded')
+        break
+      }
+      case 'profile.import': {
+        const { name, source } = request.arguments as CoreMethodMap['profile.import']['arguments']
+        this.snapshot.profiles.push({
+          id: `profile-${Date.now()}`,
+          name,
+          source,
+          active: false,
+          updatedAt: new Date().toISOString(),
+          proxies: 12,
+          rules: 640,
+          revision: 1,
+          canUpdate: true,
+          canRollback: false,
+        })
+        this.pushLog('info', `Imported profile ${name}`)
+        break
+      }
+      case 'profile.update': {
+        const { profileId } = request.arguments as CoreMethodMap['profile.update']['arguments']
+        const profile = this.snapshot.profiles.find((item) => item.id === profileId)
+        if (!profile) throw new Error('Profile not found')
+        profile.revision += 1
+        profile.canRollback = true
+        profile.updatedAt = new Date().toISOString()
+        this.pushLog('info', `Updated profile ${profile.name}`)
+        break
+      }
+      case 'profile.rollback': {
+        const { profileId } = request.arguments as CoreMethodMap['profile.rollback']['arguments']
+        const profile = this.snapshot.profiles.find((item) => item.id === profileId)
+        if (!profile || !profile.canRollback) throw new Error('No previous profile revision')
+        profile.revision = Math.max(1, profile.revision - 1)
+        profile.canRollback = profile.revision > 1
+        profile.updatedAt = new Date().toISOString()
+        this.pushLog('warning', `Rolled back profile ${profile.name}`)
         break
       }
       case 'connection.close': {

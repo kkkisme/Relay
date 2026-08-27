@@ -7,6 +7,9 @@ export type RelayAction =
   | { type: 'select-proxy'; groupId: string; nodeId: string }
   | { type: 'test-proxies'; groupId: string }
   | { type: 'activate-profile'; profileId: string }
+  | { type: 'import-profile'; name: string; source: 'remote' | 'local'; location: string }
+  | { type: 'update-profile'; profileId: string }
+  | { type: 'rollback-profile'; profileId: string }
   | { type: 'close-connection'; connectionId: string }
   | { type: 'close-all-connections' }
   | { type: 'update-settings'; settings: Partial<RelaySettings> }
@@ -55,6 +58,19 @@ export function useRelay() {
           break
         case 'activate-profile':
           next = await coreClient.call('profile.activate', { profileId: action.profileId })
+          break
+        case 'import-profile':
+          next = await coreClient.call('profile.import', {
+            name: action.name,
+            source: action.source,
+            location: action.location,
+          })
+          break
+        case 'update-profile':
+          next = await coreClient.call('profile.update', { profileId: action.profileId })
+          break
+        case 'rollback-profile':
+          next = await coreClient.call('profile.rollback', { profileId: action.profileId })
           break
         case 'close-connection':
           next = await coreClient.call('connection.close', { connectionId: action.connectionId })

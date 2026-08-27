@@ -1,13 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import process from 'node:process'
+import { parse, stringify } from 'yaml'
 import { MihomoClient } from './mihomoClient'
 
 type LogSink = (level: 'debug' | 'info' | 'warning' | 'error', message: string) => void
+type ConfigSource = { path: string; homeDirectory: string; name: string }
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
@@ -22,10 +24,6 @@ async function findFreePort() {
       server.close((error) => error ? reject(error) : resolve(port))
     })
   })
-}
-
-function quoteYaml(value: string) {
-  return JSON.stringify(value)
 }
 
 export class MihomoProcess {
@@ -53,7 +51,7 @@ export class MihomoProcess {
     return this.configPathValue ? basename(this.configPathValue, extname(this.configPathValue)) : 'runtime'
   }
 
-  async start(signal?: AbortSignal) {
+  async start(signal?: AbortSignal, source?: ConfigSource) {
     if (this.running) return
 
     const binary = this.resolveBinary()
@@ -64,26 +62,15 @@ export class MihomoProcess {
       ?? join(homedir(), '.config', 'relay', 'mihomo')
     mkdirSync(configDirectory, { recursive: true })
 
-    const suppliedConfig = process.env.RELAY_MIHOMO_CONFIG
-    const configPath = suppliedConfig ?? join(configDirectory, 'relay-bootstrap.yaml')
-    if (!suppliedConfig) {
-      writeFileSync(configPath, [
-        'mixed-port: 7890',
-        'allow-lan: false',
-        'mode: rule',
-        'log-level: info',
-        `external-controller: ${quoteYaml(controller.replace(/^https?:\/\//, ''))}`,
-        `secret: ${quoteYaml(secret)}`,
-        'proxies: []',
-        'proxy-groups: []',
-        'rules: []',
-        '',
-      ].join('\n'), { mode: 0o600 })
-    }
+    const suppliedConfig = source?.path ?? process.env.RELAY_MIHOMO_CONFIG
+    const runtimePath = join(configDirectory, 'relay-runtime.yaml')
+    this.writeRuntimeConfig(runtimePath, suppliedConfig, controller, secret)
+    const homeDirectory = source?.homeDirectory
+      ?? (suppliedConfig ? dirname(suppliedConfig) : configDirectory)
 
-    const args = process.env.RELAY_MIHOMO_ARGS
+    const args = process.env.RELAY_MIHOMO_ARGS && !source
       ? JSON.parse(process.env.RELAY_MIHOMO_ARGS) as string[]
-      : ['-d', configDirectory, '-f', configPath]
+      : ['-d', homeDirectory, '-f', runtimePath]
     const child = spawn(binary, args, {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -91,7 +78,7 @@ export class MihomoProcess {
     })
     this.child = child
     this.startedAt = Date.now()
-    this.configPathValue = configPath
+    this.configPathValue = source?.name ?? suppliedConfig ?? runtimePath
     this.clientValue = new MihomoClient(controller, secret)
 
     this.pipeLogs(child.stdout, 'info')
@@ -108,7 +95,7 @@ export class MihomoProcess {
 
     try {
       await this.waitUntilReady(signal)
-      this.log('info', `Mihomo started from ${configPath}`)
+      this.log('info', `Mihomo started from ${source?.name ?? suppliedConfig ?? 'Relay bootstrap profile'}`)
     } catch (error) {
       await this.stop()
       throw error
@@ -130,6 +117,47 @@ export class MihomoProcess {
     this.log('info', 'Mihomo stopped')
   }
 
+  async validateConfig(path: string, homeDirectory: string, signal?: AbortSignal) {
+    const binary = this.resolveBinary()
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(binary, ['-t', '-d', homeDirectory, '-f', path], {
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+      let output = ''
+      let settled = false
+      const collect = (chunk: Buffer | string) => {
+        output = `${output}${chunk}`.slice(-16_000)
+      }
+      child.stdout?.on('data', collect)
+      child.stderr?.on('data', collect)
+      const finish = (error?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        signal?.removeEventListener('abort', cancel)
+        if (error) reject(error)
+        else resolve()
+      }
+      const cancel = () => {
+        child.kill()
+        finish(signal?.reason instanceof Error ? signal.reason : new Error('Profile validation cancelled'))
+      }
+      const timeout = setTimeout(() => {
+        child.kill()
+        finish(new Error('Mihomo profile validation timed out'))
+      }, 15_000)
+      signal?.addEventListener('abort', cancel, { once: true })
+      if (signal?.aborted) cancel()
+      child.once('error', (error) => finish(error))
+      child.once('close', (code) => {
+        if (code === 0) finish()
+        else finish(new Error(`Mihomo rejected the profile: ${output.trim() || `exit code ${code ?? 'unknown'}`}`))
+      })
+    })
+  }
+
   private resolveBinary() {
     const configured = process.env.RELAY_MIHOMO_BINARY
     if (configured) return configured
@@ -144,6 +172,31 @@ export class MihomoProcess {
       throw new Error(`Mihomo binary not found. Set RELAY_MIHOMO_BINARY or place ${name} beside Relay.`)
     }
     return binary
+  }
+
+  private writeRuntimeConfig(
+    runtimePath: string,
+    suppliedConfig: string | undefined,
+    controller: string,
+    secret: string,
+  ) {
+    const configuration = suppliedConfig
+      ? parse(readFileSync(suppliedConfig, 'utf8')) as Record<string, unknown>
+      : {
+          'mixed-port': 7890,
+          'allow-lan': false,
+          mode: 'rule',
+          'log-level': 'info',
+          proxies: [],
+          'proxy-groups': [],
+          rules: [],
+        }
+    if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) {
+      throw new Error('Mihomo profile must contain a YAML object')
+    }
+    configuration['external-controller'] = controller.replace(/^https?:\/\//, '')
+    configuration.secret = secret
+    writeFileSync(runtimePath, stringify(configuration), { mode: 0o600 })
   }
 
   private async waitUntilReady(signal?: AbortSignal) {

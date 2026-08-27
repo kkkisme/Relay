@@ -48,7 +48,7 @@ export function Proxies({
                         </div>
                         <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>{node.location} · {node.type.toUpperCase()}</text>
                         <text style={{ color: node.latency && node.latency < 100 ? colors.success : colors.warning, fontFamily: FONT, fontSize: 17, fontWeight: 700 }}>
-                          {node.latency ? `${node.latency} ms` : t('proxies.notTested')}
+                          {node.error ? t('proxies.testFailed') : node.latency ? `${node.latency} ms` : t('proxies.notTested')}
                         </text>
                       </div>
                     </Card>
