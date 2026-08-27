@@ -38,7 +38,6 @@ VersionInfoProductVersion={#RelayVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -57,4 +56,3 @@ Name: "{autodesktop}\Relay"; Filename: "{app}\relay.exe"; WorkingDir: "{app}"; T
 
 [Run]
 Filename: "{app}\relay.exe"; Description: "{cm:LaunchProgram,Relay}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
-
