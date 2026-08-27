@@ -1,34 +1,35 @@
-import type { CoreEvent, CoreResponse } from './types'
-
-export type CoreEventListener = (event: CoreEvent) => void
+import type { CoreEventListener, CoreTransport } from './transport'
+import type { CoreMethod, CoreMethodMap } from './types'
 
 export class CoreClient {
   private requestId = 0
-  private listeners = new Set<CoreEventListener>()
 
-  async call<T>(method: string, argumentsValue?: unknown): Promise<T> {
-    const id = ++this.requestId
-    const response = await this.send<T>({ id, method, arguments: argumentsValue })
+  constructor(private readonly transport: CoreTransport) {}
 
-    if (response.error) {
-      throw new Error(response.error)
-    }
+  connect() {
+    return this.transport.connect()
+  }
 
-    return response.result as T
+  disconnect() {
+    return this.transport.disconnect()
   }
 
   subscribe(listener: CoreEventListener) {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+    return this.transport.subscribe(listener)
   }
 
-  private async send<T>(_request: {
-    id: number
-    method: string
-    arguments?: unknown
-  }): Promise<CoreResponse<T>> {
-    throw new Error('Core transport is not connected yet')
+  async call<K extends CoreMethod>(
+    method: K,
+    argumentsValue: CoreMethodMap[K]['arguments'],
+  ): Promise<CoreMethodMap[K]['result']> {
+    const response = await this.transport.request({
+      id: ++this.requestId,
+      method,
+      arguments: argumentsValue,
+    })
+
+    if (response.error) throw new Error(response.error)
+    if (!response.result) throw new Error(`Core method ${method} returned no result`)
+    return response.result
   }
 }
-
-export const coreClient = new CoreClient()

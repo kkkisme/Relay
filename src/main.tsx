@@ -3,6 +3,11 @@ import { App } from './ui/App'
 
 render(<App />, {
   title: 'Relay',
-  width: 1120,
-  height: 720,
+  appName: 'Relay',
+  width: 1180,
+  height: 760,
+  titlebarTransparent: true,
+  windowBackground: 'opaque',
+  trafficLightX: 18,
+  trafficLightY: 18,
 })

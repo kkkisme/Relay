@@ -8,14 +8,18 @@
 
 Relay is an experimental desktop-first proxy client built with React, TypeScript, and [GPUIX](https://github.com/remorses/gpuix). The UI renders natively through Zed's GPUI stack rather than Electron or a WebView.
 
-## Goals
+## Current milestone
 
-- Native GPU-accelerated desktop UI
-- Mihomo-compatible core integration
-- Fast startup and low UI overhead
-- Clean desktop-first interaction design
-- Windows, macOS, and Linux support
-- Profiles, proxy groups, delay testing, connections, logs, system proxy, and TUN
+The first control-plane milestone is implemented:
+
+- Native GPUIX application shell with six working sections
+- Dashboard traffic metrics and runtime controls
+- Proxy selection and latency testing
+- Profile activation, connection management, logs, and settings
+- Strictly typed RPC contract and replaceable transport boundary
+- In-memory Mock Core for UI development before the native transport lands
+
+The next milestone replaces `MockCoreTransport` with the named-pipe/Unix-socket transport and connects the UI to the real Relay Core process. See [the roadmap](docs/ROADMAP.md).
 
 ## Architecture
 
@@ -24,9 +28,9 @@ React + TypeScript
         │
       GPUIX
         │
-   Relay UI / State
+ Relay UI + State
         │
-     Core SDK
+ Typed Core SDK
         │
  Named Pipe / Unix Socket
         │
@@ -35,7 +39,7 @@ React + TypeScript
       Mihomo
 ```
 
-The desktop core is intentionally separated from the UI. Relay's TypeScript layer communicates with the core through a small RPC client, keeping the React/GPUIX application independent from core process management.
+The desktop core is intentionally separated from the UI. Every operation crosses a typed RPC boundary, so UI development can use the included Mock Core while process management, configuration validation, and Mihomo integration evolve independently.
 
 ## Tech stack
 
@@ -57,27 +61,24 @@ Install dependencies:
 bun install
 ```
 
-Run Relay:
+Run Relay with hot remount:
 
 ```bash
 bun run dev
 ```
 
-Type-check:
+Validate the project:
 
 ```bash
 bun run typecheck
-```
-
-Build a standalone executable:
-
-```bash
 bun run build
 ```
 
+The standalone executable is written to `dist/relay` (`dist/relay.exe` on Windows).
+
 ## Status
 
-Relay is in early development. The initial focus is the desktop application shell and the core RPC boundary.
+Relay is in early development. The native UI control plane and typed Core SDK boundary are ready; the real core transport is the next implementation target.
 
 ## License
 
