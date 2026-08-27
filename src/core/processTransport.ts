@@ -86,11 +86,12 @@ export class ProcessCoreTransport implements CoreTransport {
     if (!socket || socket.destroyed) throw new Error('Relay Core connection is unavailable')
 
     return new Promise((resolve, reject) => {
+      const timeoutMilliseconds = request.method.startsWith('tun.') ? 180_000 : 10_000
       const timer = setTimeout(() => {
         this.pending.delete(request.id)
         this.write({ type: 'cancel', id: request.id })
         reject(new Error(`Relay Core request timed out: ${request.method}`))
-      }, 10_000)
+      }, timeoutMilliseconds)
 
       this.pending.set(request.id, {
         resolve: resolve as (response: CoreResponse<unknown>) => void,

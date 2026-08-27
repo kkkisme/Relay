@@ -1,7 +1,7 @@
 import type { DesktopStatus, RelaySettings } from '../../core'
 import { useI18n } from '../../i18n'
 import type { RelayAction } from '../../state/useRelay'
-import { Card, SectionHeader, Toggle } from '../components'
+import { Button, Card, SectionHeader, Toggle } from '../components'
 import { colors, FONT } from '../theme'
 
 const modeLabels = {
@@ -10,7 +10,7 @@ const modeLabels = {
   direct: 'settings.mode.direct',
 } as const
 
-export function Settings({ settings, desktop, dispatch }: { settings: RelaySettings; desktop: DesktopStatus; dispatch: (action: RelayAction) => void }) {
+export function Settings({ settings, desktop, busy, dispatch }: { settings: RelaySettings; desktop: DesktopStatus; busy: string | null; dispatch: (action: RelayAction) => void }) {
   const { locale, setLocale, t } = useI18n()
   const update = (next: Partial<RelaySettings>) => dispatch({ type: 'update-settings', settings: next })
   return (
@@ -61,6 +61,13 @@ export function Settings({ settings, desktop, dispatch }: { settings: RelaySetti
               value={settings.tun}
               disabled={!settings.tun && desktop.tun.permission !== 'granted'}
               onChange={(tun) => update({ tun })}
+            />
+            <HelperRow
+              state={desktop.tun.helper}
+              detail={desktop.tun.detail}
+              disabled={busy !== null || settings.tun || !desktop.tun.installSupported}
+              onInstall={() => dispatch({ type: 'install-tun-helper' })}
+              onUninstall={() => dispatch({ type: 'uninstall-tun-helper' })}
             />
             <SettingRow title={t('settings.allowLan')} detail={t('settings.allowLan.detail')} value={settings.allowLan} onChange={(allowLan) => update({ allowLan })} />
             <SettingRow title={t('settings.ipv6')} detail={t('settings.ipv6.detail')} value={settings.ipv6} onChange={(ipv6) => update({ ipv6 })} />
@@ -134,6 +141,37 @@ export function Settings({ settings, desktop, dispatch }: { settings: RelaySetti
           </div>
         </Card>
       </div>
+    </div>
+  )
+}
+
+function HelperRow({ state, detail, disabled, onInstall, onUninstall }: {
+  state: DesktopStatus['tun']['helper']
+  detail: string
+  disabled: boolean
+  onInstall: () => void
+  onUninstall: () => void
+}) {
+  const { t } = useI18n()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <text style={{ color: colors.text, fontFamily: FONT, fontSize: 13, fontWeight: 650 }}>{t('settings.tun.helper')}</text>
+        <text style={{ color: colors.textMuted, fontFamily: FONT, fontSize: 11 }}>
+          {state === 'ready' ? t('settings.tun.helper.ready') : state === 'not-installed' ? t('settings.tun.helper.missing') : detail}
+        </text>
+      </div>
+      <Button
+        tone={state === 'ready' ? 'danger' : 'primary'}
+        disabled={disabled}
+        onClick={state === 'ready' ? onUninstall : onInstall}
+      >
+        {state === 'ready'
+          ? t('settings.tun.helper.uninstall')
+          : state === 'unavailable'
+            ? t('settings.tun.helper.repair')
+            : t('settings.tun.helper.install')}
+      </Button>
     </div>
   )
 }

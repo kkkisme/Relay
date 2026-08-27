@@ -7,6 +7,7 @@ import process from 'node:process'
 import { parse, stringify } from 'yaml'
 import { MihomoClient } from './mihomoClient'
 import { relayPaths } from './platformPaths'
+import type { PrivilegedHelperManager } from './privilegedHelper'
 
 type LogSink = (level: 'debug' | 'info' | 'warning' | 'error', message: string) => void
 type ConfigSource = { path: string; homeDirectory: string; name: string }
@@ -31,14 +32,19 @@ export class MihomoProcess {
   private clientValue?: MihomoClient
   private startedAt?: number
   private configPathValue = ''
+  private helperRunning = false
+  private helperMonitor?: ReturnType<typeof setInterval>
+  private helperProbeRunning = false
+  private helperProbeFailures = 0
 
   constructor(
     private readonly log: LogSink,
     private readonly onUnexpectedExit?: () => void,
+    private readonly helper?: PrivilegedHelperManager,
   ) {}
 
   get running() {
-    return Boolean(this.child && this.child.exitCode === null && !this.child.killed)
+    return this.helperRunning || Boolean(this.child && this.child.exitCode === null && !this.child.killed)
   }
 
   get client() {
@@ -54,10 +60,10 @@ export class MihomoProcess {
     return this.configPathValue ? basename(this.configPathValue, extname(this.configPathValue)) : 'runtime'
   }
 
-  async start(signal?: AbortSignal, source?: ConfigSource) {
+  async start(signal?: AbortSignal, source?: ConfigSource, privileged = false) {
     if (this.running) return
 
-    const binary = this.resolveBinary()
+    const binary = this.binaryPath()
     const port = Number(process.env.RELAY_MIHOMO_CONTROLLER_PORT) || await findFreePort()
     const controller = process.env.RELAY_MIHOMO_CONTROLLER ?? `http://127.0.0.1:${port}`
     const secret = process.env.RELAY_MIHOMO_SECRET ?? randomBytes(24).toString('hex')
@@ -73,16 +79,34 @@ export class MihomoProcess {
     const args = process.env.RELAY_MIHOMO_ARGS && !source
       ? JSON.parse(process.env.RELAY_MIHOMO_ARGS) as string[]
       : ['-d', homeDirectory, '-f', runtimePath]
+    this.startedAt = Date.now()
+    this.configPathValue = source?.name ?? suppliedConfig ?? runtimePath
+    this.clientValue = new MihomoClient(controller, secret)
+
+    if (privileged) {
+      if (!this.helper) throw new Error('Relay Helper is unavailable')
+      try {
+        await this.helper.start(runtimePath)
+        this.helperRunning = true
+        this.helperProbeFailures = 0
+        this.monitorHelper()
+        await this.waitUntilReady(signal)
+        this.log('info', `Mihomo started with Relay Helper from ${source?.name ?? suppliedConfig ?? 'Relay bootstrap profile'}`)
+      } catch (error) {
+        await this.stop()
+        this.clientValue = undefined
+        this.startedAt = undefined
+        throw error
+      }
+      return
+    }
+
     const child = spawn(binary, args, {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
     this.child = child
-    this.startedAt = Date.now()
-    this.configPathValue = source?.name ?? suppliedConfig ?? runtimePath
-    this.clientValue = new MihomoClient(controller, secret)
-
     this.pipeLogs(child.stdout, 'info')
     this.pipeLogs(child.stderr, 'error')
     child.once('error', (error) => this.log('error', `Failed to start Mihomo: ${error.message}`))
@@ -106,6 +130,15 @@ export class MihomoProcess {
   }
 
   async stop() {
+    if (this.helperRunning) {
+      this.helperRunning = false
+      this.clearHelperMonitor()
+      this.clientValue = undefined
+      this.startedAt = undefined
+      await this.helper?.stop()
+      this.log('info', 'Privileged Mihomo stopped')
+      return
+    }
     const child = this.child
     if (!child) return
     this.child = undefined
@@ -121,7 +154,7 @@ export class MihomoProcess {
   }
 
   async validateConfig(path: string, homeDirectory: string, signal?: AbortSignal) {
-    const binary = this.resolveBinary()
+    const binary = this.binaryPath()
     await new Promise<void>((resolve, reject) => {
       const child = spawn(binary, ['-t', '-d', homeDirectory, '-f', path], {
         env: process.env,
@@ -161,7 +194,7 @@ export class MihomoProcess {
     })
   }
 
-  private resolveBinary() {
+  binaryPath() {
     const configured = process.env.RELAY_MIHOMO_BINARY
     if (configured) return configured
     const name = process.platform === 'win32' ? 'mihomo.exe' : 'mihomo'
@@ -175,6 +208,40 @@ export class MihomoProcess {
       throw new Error(`Mihomo binary not found. Set RELAY_MIHOMO_BINARY or place ${name} beside Relay.`)
     }
     return binary
+  }
+
+  private monitorHelper() {
+    this.clearHelperMonitor()
+    this.helperMonitor = setInterval(() => {
+      if (this.helperProbeRunning || !this.helperRunning) return
+      this.helperProbeRunning = true
+      void this.helper?.status()
+        .then((status) => {
+          this.helperProbeFailures = 0
+          if (status.running || !this.helperRunning) return
+          this.handleHelperExit('Privileged Mihomo exited unexpectedly')
+        })
+        .catch(() => {
+          this.helperProbeFailures += 1
+          if (this.helperProbeFailures >= 3) this.handleHelperExit('Relay Helper became unavailable')
+        })
+        .finally(() => { this.helperProbeRunning = false })
+    }, 1_000)
+  }
+
+  private clearHelperMonitor() {
+    if (this.helperMonitor) clearInterval(this.helperMonitor)
+    this.helperMonitor = undefined
+  }
+
+  private handleHelperExit(message: string) {
+    if (!this.helperRunning) return
+    this.helperRunning = false
+    this.clientValue = undefined
+    this.startedAt = undefined
+    this.clearHelperMonitor()
+    this.log('error', message)
+    this.onUnexpectedExit?.()
   }
 
   private writeRuntimeConfig(

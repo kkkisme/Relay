@@ -70,6 +70,8 @@ export type DesktopStatus = {
     supported: boolean
     permission: 'granted' | 'required' | 'unavailable'
     detail: string
+    helper: 'ready' | 'not-installed' | 'unavailable'
+    installSupported: boolean
   }
   launchAtLogin: {
     supported: boolean
@@ -122,6 +124,8 @@ export type CoreMethodMap = {
   'connection.close': { arguments: { connectionId: string }; result: RelaySnapshot }
   'connection.close-all': { arguments: undefined; result: RelaySnapshot }
   'settings.update': { arguments: Partial<RelaySettings>; result: RelaySnapshot }
+  'tun.install-helper': { arguments: undefined; result: RelaySnapshot }
+  'tun.uninstall-helper': { arguments: undefined; result: RelaySnapshot }
   'logs.clear': { arguments: undefined; result: RelaySnapshot }
 }
 

@@ -28,10 +28,11 @@ The Mihomo feature-integration milestone is implemented, and the first desktop-i
 - Platform-native application data and rotating Relay Core logs
 - Reversible Windows, macOS, and GNOME system proxy management with crash recovery
 - TUN capability and privilege reporting before the setting can be enabled
+- Installable, token-authenticated privileged TUN helper with a pinned Mihomo binary hash
 - Launch-at-login registration for Windows, macOS, and XDG desktops
 - In-memory Mock Core retained for deterministic UI development
 
-The remaining desktop work is a signed/elevated TUN helper plus tray and background-window behavior. The installed GPUIX release does not yet expose tray or window hide/show APIs, so Relay reports that boundary explicitly instead of emulating an Electron API. See [the roadmap](docs/ROADMAP.md) and [desktop integration notes](docs/DESKTOP_INTEGRATION.md).
+The remaining desktop work is tray/background-window behavior and update handling. The installed GPUIX release does not yet expose tray or window hide/show APIs, so Relay reports that boundary explicitly instead of emulating an Electron API. See [the roadmap](docs/ROADMAP.md) and [desktop integration notes](docs/DESKTOP_INTEGRATION.md).
 
 ## Architecture
 
@@ -80,7 +81,7 @@ Run Relay with hot remount:
 bun run dev
 ```
 
-`bun run dev` first builds the standalone Relay Core. Relay Core starts Mihomo automatically and creates a minimal bootstrap configuration when no profile has been supplied. Imported configurations are copied into managed storage and validated with `mihomo -t` before they can be activated. Relay injects its loopback controller and random secret into a separate runtime copy, leaving the imported revision unchanged.
+`bun run dev` first builds the standalone Relay Helper and Relay Core. Relay Core starts Mihomo automatically and creates a minimal bootstrap configuration when no profile has been supplied. Imported configurations are copied into managed storage and validated with `mihomo -t` before they can be activated. Relay injects its loopback controller and random secret into a separate runtime copy, leaving the imported revision unchanged. Installing the TUN helper requires the packaged Mihomo executable to sit beside `relay-helper`; arbitrary external binaries are deliberately rejected at the privilege boundary.
 
 Useful environment variables:
 
@@ -95,6 +96,7 @@ Useful environment variables:
 | `RELAY_PROFILE_DIR` | Managed profile and revision storage directory |
 | `RELAY_DATA_DIR` | Persistent Relay settings directory |
 | `RELAY_APP_BINARY` | Packaged Relay executable used for launch-at-login registration |
+| `RELAY_HELPER_BINARY` | Packaged Relay Helper executable used for TUN service installation |
 | `RELAY_CORE_MODE=mock` | Use the in-memory Mock Core instead of the child process |
 
 Validate the project:
@@ -109,7 +111,7 @@ The standalone executables are written to `dist/relay` and `dist/relay-core` (`.
 
 ## Status
 
-Relay is in early development. The native control plane, real Relay Core transport, managed Mihomo profile lifecycle, and recoverable system-proxy integration are implemented. Privileged TUN installation, tray/background behavior, packaging, and release hardening remain under development.
+Relay is in early development. The native control plane, real Relay Core transport, managed Mihomo profile lifecycle, recoverable system-proxy integration, and privileged TUN runtime are implemented. Tray/background behavior, application updates, packaging, and release hardening remain under development.
 
 ## License
 

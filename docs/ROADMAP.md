@@ -41,7 +41,7 @@ Profiles are copied into Relay-managed storage, validated by Mihomo before use, 
 ## Phase 4 — Desktop integration ◐
 
 - [x] System proxy lifecycle with crash recovery
-- [ ] TUN installation, permissions, and state management (capability/permission reporting is implemented; privileged installation remains)
+- [x] TUN installation, permissions, and state management through the constrained Relay Helper
 - [ ] Tray menu, launch at login, and background operation (launch at login is implemented; GPUIX tray/window APIs remain)
 - [ ] Platform-specific paths, logs, and update handling (paths and rotating logs are implemented; update handling remains)
 

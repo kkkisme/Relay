@@ -13,6 +13,8 @@ export type RelayAction =
   | { type: 'close-connection'; connectionId: string }
   | { type: 'close-all-connections' }
   | { type: 'update-settings'; settings: Partial<RelaySettings> }
+  | { type: 'install-tun-helper' }
+  | { type: 'uninstall-tun-helper' }
   | { type: 'clear-logs' }
 
 export function useRelay() {
@@ -80,6 +82,12 @@ export function useRelay() {
           break
         case 'update-settings':
           next = await coreClient.call('settings.update', action.settings)
+          break
+        case 'install-tun-helper':
+          next = await coreClient.call('tun.install-helper', undefined)
+          break
+        case 'uninstall-tun-helper':
+          next = await coreClient.call('tun.uninstall-helper', undefined)
           break
         case 'clear-logs':
           next = await coreClient.call('logs.clear', undefined)

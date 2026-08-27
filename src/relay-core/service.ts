@@ -85,6 +85,7 @@ export class RelayCoreService {
     this.process = new MihomoProcess(
       (level, message) => this.pushLog(level, message),
       () => void this.handleUnexpectedCoreExit(),
+      this.desktop.helper,
     )
     this.profiles = new ProfileStore((path, homeDirectory, signal) =>
       this.process.validateConfig(path, homeDirectory, signal))
@@ -188,6 +189,17 @@ export class RelayCoreService {
         this.pushLog('info', 'Runtime settings updated')
         break
       }
+      case 'tun.install-helper':
+        await this.desktop.installTunHelper(this.process.binaryPath())
+        this.invalidateDesktopStatus()
+        this.pushLog('info', 'Relay privileged helper installed')
+        break
+      case 'tun.uninstall-helper':
+        if (this.settings.tun) throw new Error('Disable TUN before uninstalling Relay Helper')
+        await this.desktop.uninstallTunHelper()
+        this.invalidateDesktopStatus()
+        this.pushLog('warning', 'Relay privileged helper uninstalled')
+        break
       case 'logs.clear':
         this.logs = []
         break
@@ -371,7 +383,8 @@ export class RelayCoreService {
 
   private async launch(target?: ConfigTarget, signal?: AbortSignal) {
     if (this.settings.tun) await this.desktop.requireTunPermission()
-    await this.process.start(signal, target ? this.processTarget(target) : undefined)
+    const privileged = this.settings.tun && await this.desktop.useTunHelper()
+    await this.process.start(signal, target ? this.processTarget(target) : undefined, privileged)
     try {
       await this.process.client.updateSettings(this.settings, signal)
       if (this.settings.systemProxy) {
@@ -389,6 +402,10 @@ export class RelayCoreService {
   private async updateSettings(next: Partial<RelaySettings>, signal?: AbortSignal) {
     const previous = { ...this.settings }
     if (next.tun === true) await this.desktop.requireTunPermission()
+    if (this.process.running && next.tun !== undefined && next.tun !== previous.tun) {
+      await this.restartForTunSetting(next, previous, signal)
+      return
+    }
     try {
       if (this.process.running) await this.process.client.updateSettings(next, signal)
       if (next.launchAtLogin !== undefined && next.launchAtLogin !== previous.launchAtLogin) {
@@ -420,6 +437,30 @@ export class RelayCoreService {
       }
       this.invalidateDesktopStatus()
       throw error
+    }
+  }
+
+  private async restartForTunSetting(next: Partial<RelaySettings>, previous: RelaySettings, signal?: AbortSignal) {
+    const target = this.profiles.activeConfig()
+    this.settings = { ...previous, ...next }
+    await this.process.stop()
+    try {
+      if (!this.settings.systemProxy) await this.desktop.disableSystemProxy()
+      await this.launch(target, signal)
+      if (next.launchAtLogin !== undefined && next.launchAtLogin !== previous.launchAtLogin) {
+        await this.desktop.setLaunchAtLogin(next.launchAtLogin)
+      }
+      this.settings = this.settingsStore.update(next)
+      this.invalidateDesktopStatus()
+    } catch (error) {
+      await this.process.stop().catch(() => {})
+      this.settings = previous
+      if (next.launchAtLogin !== undefined && next.launchAtLogin !== previous.launchAtLogin) {
+        await this.desktop.setLaunchAtLogin(previous.launchAtLogin).catch(() => {})
+      }
+      await this.restoreProcess(target)
+      this.invalidateDesktopStatus()
+      throw new Error(`TUN privilege switch failed; previous runtime restored. ${this.errorMessage(error)}`)
     }
   }
 

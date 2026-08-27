@@ -4,7 +4,7 @@ import type { DesktopStatus } from '../core/types'
 import type { CommandRunner } from './systemProxy'
 import { runCommand } from './systemProxy'
 
-type TunStatus = DesktopStatus['tun']
+type TunStatus = Omit<DesktopStatus['tun'], 'helper' | 'installSupported'>
 
 export class TunPermissionInspector {
   constructor(

@@ -87,7 +87,13 @@ const initialSnapshot: RelaySnapshot = {
   desktop: {
     platform: 'mock',
     systemProxy: { supported: true, enabled: true, managed: true },
-    tun: { supported: true, permission: 'granted', detail: 'Mock TUN permission granted' },
+    tun: {
+      supported: true,
+      permission: 'granted',
+      detail: 'Mock TUN permission granted',
+      helper: 'ready',
+      installSupported: true,
+    },
     launchAtLogin: { supported: true, enabled: false },
     tray: { supported: false, detail: 'Waiting for GPUIX tray support' },
   },
@@ -225,6 +231,17 @@ export class MockCoreTransport implements CoreTransport {
         this.snapshot.desktop.systemProxy.managed = this.snapshot.settings.systemProxy
         this.snapshot.desktop.launchAtLogin.enabled = this.snapshot.settings.launchAtLogin
         this.pushLog('info', 'Runtime settings updated')
+        break
+      case 'tun.install-helper':
+        this.snapshot.desktop.tun.helper = 'ready'
+        this.snapshot.desktop.tun.permission = 'granted'
+        this.pushLog('info', 'Relay privileged helper installed')
+        break
+      case 'tun.uninstall-helper':
+        if (this.snapshot.settings.tun) throw new Error('Disable TUN before uninstalling Relay Helper')
+        this.snapshot.desktop.tun.helper = 'not-installed'
+        this.snapshot.desktop.tun.permission = 'required'
+        this.pushLog('warning', 'Relay privileged helper uninstalled')
         break
       case 'logs.clear':
         this.snapshot.logs = []

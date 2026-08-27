@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run build:core && bun --hot src/main.tsx",
+    "dev": "bun run build:helper && bun run build:core && bun --hot src/main.tsx",
     "dev:ui": "bun --hot src/main.tsx",
-    "build": "bun run build:core && bun run build:ui",
+    "build": "bun run build:helper && bun run build:core && bun run build:ui",
+    "build:helper": "bun build --compile src/relay-helper/main.ts --outfile dist/relay-helper",
     "build:core": "bun build --compile src/relay-core/main.ts --outfile dist/relay-core",
     "build:ui": "bun build --compile src/main.tsx --outfile dist/relay",
     "test": "bun test",

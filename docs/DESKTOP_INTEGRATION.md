@@ -8,7 +8,8 @@ Relay Core owns desktop operating-system changes. The GPUIX UI only reads typed 
 | --- | --- | --- | --- |
 | System proxy | Current-user Internet Settings | `networksetup` web/secure proxy | GNOME `gsettings` HTTP/HTTPS proxy |
 | Crash recovery | Atomic recovery document | Atomic recovery document | Atomic recovery document |
-| TUN status | Administrator/Wintun readiness | Root or privileged-helper boundary | `/dev/net/tun` and privilege boundary |
+| TUN helper | SYSTEM startup task | Root LaunchDaemon | Root systemd service |
+| TUN status | Native administrator state or Helper | Native root state or Helper | `/dev/net/tun` plus native capability or Helper |
 | Launch at login | HKCU Run key | Per-user LaunchAgent | XDG autostart entry |
 | Tray/background | Pending GPUIX API | Pending GPUIX API | Pending GPUIX API |
 
@@ -30,6 +31,20 @@ The adapter never modifies an imported Mihomo profile. It reads the active runti
 
 ## Deliberate capability boundaries
 
-Relay currently detects whether TUN can be enabled safely, but it does not install a privileged helper, change executable capabilities, or elevate itself. Those operations require signed/package-specific workflows and remain a separate release milestone.
+## Privileged TUN helper
+
+The Settings screen can install, repair, or uninstall Relay Helper through the operating system's authorization prompt. Windows registers a startup task under `SYSTEM`, macOS installs a root LaunchDaemon, and Linux installs a root systemd unit through `pkexec`. The UI and Relay Core remain unprivileged.
+
+The helper exposes a loopback-only, token-authenticated control endpoint. Its protocol only permits status, start, and stop operations. At installation it copies the authorized Helper executable itself plus the same-directory packaged Mihomo into protected system directories and pins the Mihomo SHA-256 digest. Every start verifies that digest, rejects configurations outside Relay-managed storage, requires a loopback Mihomo controller with a strong secret, and stages root-owned runtime files in a separate system data directory. Windows removes inherited user ACLs from the system token/runtime directory. Linux additionally bounds the service to networking capabilities and mounts the rest of the system read-only.
+
+Enabling or disabling TUN restarts Mihomo across the privilege boundary. If the privileged start fails, Relay restores the previous runtime and system-proxy state. Uninstalling the helper requires TUN to be disabled and removes its protected runtime data.
+
+| Platform | Protected binaries | Privileged runtime |
+| --- | --- | --- |
+| Windows | `%ProgramFiles%\\Relay` | `%ProgramData%\\Relay\\runtime` |
+| macOS | `/Library/PrivilegedHelperTools` | `/Library/Application Support/Relay/runtime` |
+| Linux | `/usr/lib/relay` | `/var/lib/relay` |
+
+Signing, notarization, installer packaging, and upgrade migration remain Phase 5 release work. A helper upgrade intentionally requires reinstalling the service so its protected binaries and pinned hash are refreshed.
 
 GPUIX 0.5.1 does not expose a system-tray API or reliable window hide/show primitives. The UI therefore reports tray/background support as pending. When GPUIX adds those capabilities, they can be implemented behind `DesktopIntegration` without changing the Relay Core RPC boundary.
