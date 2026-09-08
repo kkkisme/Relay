@@ -6,7 +6,8 @@ render(<App />, {
   appName: 'Relay',
   width: 1180,
   height: 760,
-  titlebarTransparent: true,
+  // Windows needs native window chrome until custom caption hit-testing exists.
+  titlebarTransparent: process.platform !== 'win32',
   windowBackground: 'opaque',
   trafficLightX: 18,
   trafficLightY: 18,
