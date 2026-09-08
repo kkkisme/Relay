@@ -11,6 +11,7 @@ import type {
   HelperResponse,
   HelperStatus,
 } from '../relay-helper/protocol'
+import { helperExecutable } from '../runtime'
 import { relayPaths } from './platformPaths'
 
 type HelperState = {
@@ -74,10 +75,7 @@ export class PrivilegedHelperManager {
 
   get helperBinary() {
     if (this.options.helperBinary) return resolve(this.options.helperBinary)
-    if (process.env.RELAY_HELPER_BINARY) return resolve(process.env.RELAY_HELPER_BINARY)
-    const name = this.platform === 'win32' ? 'relay-helper.exe' : 'relay-helper'
-    const candidates = [join(dirname(process.execPath), name), join(process.cwd(), 'dist', name), join(process.cwd(), 'bin', name)]
-    return resolve(candidates.find(existsSync) ?? candidates[1])
+    return helperExecutable(this.platform)
   }
 
   get installSupported() {
@@ -235,10 +233,10 @@ export class PrivilegedHelperManager {
 }
 
 async function elevate(helperBinary: string, operation: 'install' | 'uninstall', source?: string) {
-  const args = [`--${operation}`, ...(source ? ['--source', source] : [])]
+  const args = ['--helper', `--${operation}`, ...(source ? ['--source', source] : [])]
   if (process.platform === 'win32') {
-    const argumentList = args.map(powershell).join(',')
-    const script = `$p=Start-Process -FilePath ${powershell(helperBinary)} -ArgumentList @(${argumentList}) -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode`
+    const argumentList = powershell(args.map((arg) => `"${arg}"`).join(' '))
+    const script = `$p=Start-Process -FilePath ${powershell(helperBinary)} -ArgumentList ${argumentList} -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode`
     await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script])
     return
   }

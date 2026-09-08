@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import process from 'node:process'
+import { compiled, coreCommand } from '../runtime'
 import type { CoreEventListener, CoreTransport } from './transport'
 import type { CoreEvent, CoreMethod, CoreMethodMap, CoreRequest, CoreResponse } from './types'
 
@@ -18,17 +18,6 @@ const retryDelays = [40, 80, 160, 320, 640, 1000, 1500]
 
 const delay = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
-
-function coreExecutable() {
-  if (process.env.RELAY_CORE_BINARY) return process.env.RELAY_CORE_BINARY
-  const name = process.platform === 'win32' ? 'relay-core.exe' : 'relay-core'
-  const candidates = [
-    join(dirname(process.execPath), name),
-    join(process.cwd(), 'dist', name),
-    join(process.cwd(), 'bin', name),
-  ]
-  return candidates.find(existsSync) ?? candidates[1]
-}
 
 function coreEndpoint() {
   if (process.env.RELAY_CORE_SOCKET) return process.env.RELAY_CORE_SOCKET
@@ -134,11 +123,10 @@ export class ProcessCoreTransport implements CoreTransport {
 
   private spawnCore() {
     if (this.child && this.child.exitCode === null) return
-    const executable = coreExecutable()
-    const executableName = basename(process.execPath).toLowerCase()
+    const command = coreCommand()
     const appBinary = process.env.RELAY_APP_BINARY
-      ?? (executableName === 'relay' || executableName === 'relay.exe' ? process.execPath : undefined)
-    const child = spawn(executable, ['--socket', this.endpoint], {
+      ?? (compiled ? process.execPath : undefined)
+    const child = spawn(command.file, [...command.args, '--socket', this.endpoint], {
       env: {
         ...process.env,
         ...(appBinary ? { RELAY_APP_BINARY: appBinary } : {}),

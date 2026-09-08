@@ -2,10 +2,14 @@ name: Release
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [main]
     paths:
       - .github/workflows/release.yml
+      - src/**
+      - scripts/**
+      - bun.lock
       - packaging/**
       - assets/icon.ico
       - package.json
@@ -49,14 +53,15 @@ jobs:
           bun run typecheck
           bun test
 
-      - name: Build Windows executables
+      - name: Build unified Windows executable
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           $fileVersion = "$env:RELAY_VERSION.0"
-          bun build --compile src/main.tsx --outfile dist/relay.exe --windows-hide-console --windows-icon=assets/icon.ico --windows-title=Relay --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay Mihomo desktop client"
-          bun build --compile src/relay-core/main.ts --outfile dist/relay-core.exe --windows-hide-console --windows-title="Relay Core" --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay Core service"
-          bun build --compile src/relay-helper/main.ts --outfile dist/relay-helper.exe --windows-hide-console --windows-title="Relay Helper" --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay privileged TUN helper"
+          bun build --compile --minify --define RELAY_COMPILED=true src/main.tsx --outfile dist/relay.exe --windows-hide-console --windows-icon=assets/icon.ico --windows-title=Relay --windows-publisher=Relay --windows-version=$fileVersion --windows-description="Relay Mihomo desktop client"
+
+      - name: Verify packaged Core and Helper roles
+        run: bun run test:packaged
 
       - name: Bundle Mihomo
         shell: pwsh
@@ -83,7 +88,7 @@ jobs:
 
           $portable = "release/Relay-$env:RELAY_VERSION-windows-x64-portable"
           New-Item -ItemType Directory -Force $portable | Out-Null
-          Copy-Item dist/*.exe $portable
+          Copy-Item dist/relay.exe,dist/mihomo.exe $portable
           Copy-Item LICENSE,THIRD_PARTY_NOTICES.md $portable
           Compress-Archive -Path "$portable/*" -DestinationPath "$portable.zip" -CompressionLevel Optimal
           Remove-Item $portable -Recurse -Force
@@ -97,19 +102,30 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Relay installer exited with code $($process.ExitCode)" }
 
           $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Relay'
-          foreach ($name in 'relay.exe','relay-core.exe','relay-helper.exe','mihomo.exe') {
+          foreach ($name in 'relay.exe','mihomo.exe') {
             if (-not (Test-Path (Join-Path $installRoot $name))) { throw "Installed file is missing: $name" }
+          }
+
+          foreach ($name in 'relay-core.exe','relay-helper.exe') {
+            if (Test-Path (Join-Path $installRoot $name)) { throw "Obsolete runtime is still installed: $name" }
           }
 
           $app = Start-Process (Join-Path $installRoot 'relay.exe') -PassThru
           Start-Sleep -Seconds 12
           if ($app.HasExited) { throw "Installed Relay exited during startup with code $($app.ExitCode)" }
-          if (-not (Get-Process -Name 'relay-core' -ErrorAction SilentlyContinue)) { throw 'Installed Relay did not start Relay Core.' }
+          $core = Get-CimInstance Win32_Process -Filter "Name = 'relay.exe'" | Where-Object { $_.ParentProcessId -eq $app.Id -and $_.CommandLine -match '--core' }
+          if (-not $core) { throw 'Installed Relay did not start its --core role.' }
           if (-not (Get-Process -Name 'mihomo' -ErrorAction SilentlyContinue)) { throw 'Installed Relay Core did not start Mihomo.' }
 
-          Get-Process -Name 'relay','relay-core','mihomo' -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Process -Name 'relay','mihomo' -ErrorAction SilentlyContinue | Stop-Process -Force
           $uninstaller = Join-Path $installRoot 'unins000.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Relay uninstaller is missing.' }
+
+      - name: Report package sizes
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | ForEach-Object { "Runtime: $($_.Name) $($_.Length) bytes" } | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-ChildItem release -File | ForEach-Object { "Download: $($_.Name) $($_.Length) bytes" } | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Write checksums
         shell: pwsh
@@ -127,16 +143,18 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $notes = @"
-          Relay $env:RELAY_VERSION is the first directly installable preview.
+          Relay $env:RELAY_VERSION uses one executable for UI, Core, and Helper.
 
           Included:
           - Relay native GPUIX desktop client
-          - Relay Core and privileged TUN Helper
+          - Relay Core and privileged TUN Helper share one bundled Bun runtime
+          - Native Windows titlebar restored for dragging
           - Mihomo $env:MIHOMO_VERSION
           - Simplified Chinese and English UI
 

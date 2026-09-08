@@ -87,7 +87,7 @@ Run Relay with hot remount:
 bun run dev
 ```
 
-`bun run dev` first builds the standalone Relay Helper and Relay Core. Relay Core starts Mihomo automatically and creates a minimal bootstrap configuration when no profile has been supplied. Imported configurations are copied into managed storage and validated with `mihomo -t` before they can be activated. Relay injects its loopback controller and random secret into a separate runtime copy, leaving the imported revision unchanged. Installing the TUN helper requires the packaged Mihomo executable to sit beside `relay-helper`; arbitrary external binaries are deliberately rejected at the privilege boundary.
+`bun run dev` starts the UI and a separate Core process from source using the same Bun executable. To test TUN installation, run `bun run build` and place Mihomo beside `dist/relay` first. Relay Core starts Mihomo automatically and creates a minimal bootstrap configuration when no profile has been supplied. Imported configurations are copied into managed storage and validated with `mihomo -t` before they can be activated. Relay injects its loopback controller and random secret into a separate runtime copy, leaving the imported revision unchanged. Installing the TUN helper requires the packaged Mihomo executable to sit beside `relay`; arbitrary external binaries are deliberately rejected at the privilege boundary.
 
 Useful environment variables:
 
@@ -102,7 +102,7 @@ Useful environment variables:
 | `RELAY_PROFILE_DIR` | Managed profile and revision storage directory |
 | `RELAY_DATA_DIR` | Persistent Relay settings directory |
 | `RELAY_APP_BINARY` | Packaged Relay executable used for launch-at-login registration |
-| `RELAY_HELPER_BINARY` | Packaged Relay Helper executable used for TUN service installation |
+| `RELAY_HELPER_BINARY` | Unified Relay executable used with `--helper` for TUN service installation |
 | `RELAY_CORE_MODE=mock` | Use the in-memory Mock Core instead of the child process |
 
 Validate the project:
@@ -113,7 +113,15 @@ bun test
 bun run build
 ```
 
-The standalone executables are written to `dist/relay` and `dist/relay-core` (`.exe` on Windows).
+The build writes one executable, `dist/relay` (`dist/relay.exe` on Windows), containing one Bun runtime:
+
+- `relay`: native UI
+- `relay --core`: separate background Core process
+- `relay --helper`: privileged helper operations (`--install`, `--uninstall`, or `--daemon --config ...`)
+
+Core and Helper load without initializing GPUIX. The installer bundles only this executable and Mihomo, plus license notices. TUN installation still copies Relay and Mihomo to protected system storage and launches the copy with `--helper`; this preserves the privilege boundary and is not another bundled runtime. Existing installed helpers keep working; reinstall the helper from Settings to update its protected copy and startup definition.
+
+Run `bun run test:packaged` after building to verify Core RPC and Helper authentication using the compiled executable from a path containing spaces. `RELAY_CORE_BINARY` remains an optional standalone Core override for development.
 
 ## Status
 
