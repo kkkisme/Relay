@@ -149,7 +149,7 @@ function installWindows(config: HelperConfig, destination: string) {
 
 export function renderWindowsTask(config: HelperConfig, destination: string) {
   const execute = powershell(config.helperBinary)
-  const argumentsValue = powershell(`--daemon --config "${destination}"`)
+  const argumentsValue = powershell(`--helper --daemon --config "${destination}"`)
   return [
     `$action=New-ScheduledTaskAction -Execute ${execute} -Argument ${argumentsValue}`,
     "$principal=New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest",
@@ -173,7 +173,7 @@ export function renderMacPlist(config: HelperConfig, destination: string) {
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
     '<plist version="1.0"><dict>',
     '<key>Label</key><string>app.relay.helper</string>',
-    `<key>ProgramArguments</key><array><string>${xml(config.helperBinary)}</string><string>--daemon</string><string>--config</string><string>${xml(destination)}</string></array>`,
+    `<key>ProgramArguments</key><array><string>${xml(config.helperBinary)}</string><string>--helper</string><string>--daemon</string><string>--config</string><string>${xml(destination)}</string></array>`,
     '<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>',
     '</dict></plist>',
     '',
@@ -194,7 +194,7 @@ export function renderSystemdUnit(config: HelperConfig, destination: string) {
     '',
     '[Service]',
     'Type=simple',
-    `ExecStart=${quoteSystemd(config.helperBinary)} --daemon --config ${quoteSystemd(destination)}`,
+    `ExecStart=${quoteSystemd(config.helperBinary)} --helper --daemon --config ${quoteSystemd(destination)}`,
     'Restart=on-failure',
     'RestartSec=2',
     'NoNewPrivileges=true',

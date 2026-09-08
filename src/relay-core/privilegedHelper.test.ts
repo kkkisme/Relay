@@ -108,8 +108,8 @@ describe('PrivilegedHelperManager', () => {
     }
     writeFileSync(configPath, JSON.stringify(config))
     writeFileSync(clientConfigPath, JSON.stringify({ version: 1, token, port }))
-    const main = join(import.meta.dir, '..', 'relay-helper', 'main.ts')
-    const child = spawn(process.execPath, [main, '--daemon', '--config', configPath], {
+    const main = join(import.meta.dir, '..', 'main.tsx')
+    const child = spawn(process.execPath, [main, '--helper', '--daemon', '--config', configPath], {
       stdio: 'ignore',
       windowsHide: true,
     })

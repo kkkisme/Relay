@@ -19,6 +19,7 @@ describe('Relay Helper service definitions', () => {
       ...config,
       helperBinary: "C:\\Program Files\\Relay\\relay-helper.exe",
     }, 'C:\\ProgramData\\Relay\\helper.json')
+    expect(script).toContain('--helper --daemon --config')
     expect(script).toContain("-UserId 'SYSTEM'")
     expect(script).toContain('New-ScheduledTaskTrigger -AtStartup')
     expect(script).toContain('C:\\Program Files\\Relay\\relay-helper.exe')
@@ -28,12 +29,14 @@ describe('Relay Helper service definitions', () => {
     const plist = renderMacPlist({ ...config, helperBinary: '/Library/Relay & Helper' }, '/Library/Relay & Config')
     expect(plist).toContain('<key>Label</key><string>app.relay.helper</string>')
     expect(plist).toContain('/Library/Relay &amp; Helper')
+    expect(plist).toContain('<string>--helper</string><string>--daemon</string>')
     expect(plist).toContain('<key>KeepAlive</key><true/>')
   })
 
   test('hardens the Linux systemd unit', () => {
     const unit = renderSystemdUnit(config, '/etc/relay/helper.json')
     expect(unit).toContain('ExecStart="/Library/PrivilegedHelperTools/app.relay.helper"')
+    expect(unit).toContain('--helper --daemon --config')
     expect(unit).toContain('NoNewPrivileges=true')
     expect(unit).toContain('CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE')
     expect(unit).toContain('ProtectSystem=strict')

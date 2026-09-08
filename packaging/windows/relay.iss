@@ -42,10 +42,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+; Remove superseded app-local binaries when upgrading from the three-executable build.
+; The protected, installed TUN service is managed separately by Relay.
+[InstallDelete]
+Type: files; Name: "{app}\relay-core.exe"
+Type: files; Name: "{app}\relay-helper.exe"
+
 [Files]
 Source: "..\..\dist\relay.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\dist\relay-core.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\dist\relay-helper.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\dist\mihomo.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion

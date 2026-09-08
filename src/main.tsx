@@ -1,13 +1,14 @@
-import { render } from '@gpuix/react'
-import { App } from './ui/App'
+import { runtimeRole } from './runtime'
 
-render(<App />, {
-  title: 'Relay',
-  appName: 'Relay',
-  width: 1180,
-  height: 760,
-  titlebarTransparent: true,
-  windowBackground: 'opaque',
-  trafficLightX: 18,
-  trafficLightY: 18,
-})
+// Load only the selected role: headless/elevated processes must not initialize GPUIX.
+switch (runtimeRole(process.argv.slice(2))) {
+  case 'core':
+    await import('./relay-core/main')
+    break
+  case 'helper':
+    await import('./relay-helper/main')
+    break
+  case 'ui':
+    await import('./ui/main')
+    break
+}
